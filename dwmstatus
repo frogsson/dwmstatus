@@ -90,7 +90,7 @@ async def get_weather():
         lines = data.decode('utf-8').rstrip()
         await proc.wait()
 
-        if "Weather Report" not in lines:
+        if "Weather report" not in lines:
             # will try again if there was an error in async subprocess
             weather = ""
 
