@@ -1,0 +1,2 @@
+# dwmstatus
+Statusbar for dwm
