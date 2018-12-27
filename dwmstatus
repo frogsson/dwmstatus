@@ -109,6 +109,8 @@ async def get_weather():
 
         if len(degrees) >= 2:
             wttr += "%s°C" % degrees[1]
+
+        if len(degrees) >= 3:
             wttr += "%s%s°C" % (" to " if degrees[1] != None else "", degrees[2])
 
         logging.debug(wttr)
