@@ -1,0 +1,77 @@
+extern crate chrono;
+extern crate reqwest;
+extern crate regex;
+
+use chrono::{Local};
+use reqwest::{get};
+use std::process::Command;
+use std::string::String;
+use std::thread;
+use std::time::Duration;
+use regex::Regex;
+
+fn main() {
+    get_weather();
+    // loop {
+    //     let output = get_timedate();
+    //     call(output);
+    //     thread::sleep(Duration::from_secs(60));
+    // }
+}
+
+fn call(out: String) {
+    Command::new("xsetroot")
+        .arg("-name")
+        .arg(out)
+        .output()
+        .expect("something happened");
+}
+
+fn get_timedate() -> String {
+    let current_time = Local::now().format("%A %b %Y-%m-%d %H:%M").to_string();
+    let out = String::from(
+        format!("\u{e225}{}", current_time));
+
+    out
+}
+
+fn get_weather()  {
+    // wttr.in/:help
+    // wttr.in/CITY?T0
+
+    let body = get("http://wttr.in/Orebro?t0").expect("error")
+        .text().expect("failed to get body");
+
+    let test: Vec<&str> = body.split("<pre>").collect();
+    let mut weather = String::from(format!("\u{e01d}"));
+
+    for (num, line) in test[1].split("\n").enumerate() {
+
+        // println!("{} -- {}", num, line);
+
+        if num == 3 {
+            let mut weathervec: Vec<&str> = line.split(">").collect();
+            let current_weather = weathervec.pop().unwrap().trim();
+            weather.push_str(current_weather);
+        }
+
+        if num == 4 {
+            let re = Regex::new(r"<span class=.+?>(.+?)</span>").unwrap();
+
+            for (n, cap) in re.captures_iter(line).enumerate() {
+                let l = String::from(&cap[1]);
+
+                if n == 1 {
+                    weather.push_str(&format!(" {}", l));
+                }
+                if n == 2 {
+                    weather.push_str(&format!(" to {}", &l));
+                }
+            }
+            break
+        }
+    }
+    println!("weather = {}", weather);
+
+    // println!("body = {}", body);
+}
