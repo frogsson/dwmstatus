@@ -1,6 +1,5 @@
 extern crate chrono;
 extern crate reqwest;
-extern crate regex;
 
 use chrono::{Local};
 use reqwest::{get};
