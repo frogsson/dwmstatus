@@ -48,11 +48,18 @@ fn get_weather() -> String {
     // wttr.in/:help
     // wttr.in/CITY?T0
 
-    let body = get("http://wttr.in/Orebro?t0").expect("error")
-        .text().expect("failed to get body");
+    let mut req = get("http://wttr.in/Orebro?t0").expect("404?");
+    let mut body = String::new();
+
+    if req.status().as_u16() == 200 {
+        body.push_str(&req.text().expect("error >.<"));
+    } else {
+        return "".to_string()
+    }
 
     let presection: Vec<&str> = body.split("<pre>").collect();
-    let mut weather = String::from(format!("\u{e01d}"));
+    let mut weather = String::from("\u{e01d}");
+    let mut firstval = false;
 
     for (num, line) in presection[1].split("\n").enumerate() {
         if num == 3 {
@@ -62,17 +69,25 @@ fn get_weather() -> String {
         }
 
         if num == 4 {
-            for (n, val) in line.split("<span").enumerate() {
+            for val in line.split("<span") {
                 let celvec = val.split(">").collect::<Vec<&str>>();
 
                 if celvec.len() >= 2 {
-                    let cel = celvec[1].split("<").collect::<Vec<&str>>()[0].to_string();
-
-                    if n == 3 {
-                        weather.push_str(&format!(" {}°C", cel))
-                    } else if n == 4 {
-                        weather.push_str(&format!(" to {}°C", cel))
-                    }
+                    let cel = celvec[1].split("<")
+                        .collect::<Vec<&str>>()[0]
+                        .to_string().parse::<u32>();
+                    match cel {
+                        Ok(celu) => { 
+                            if !firstval {
+                                weather.push_str(&format!(" {}°C", celu));
+                                firstval = true;
+                            } else {
+                                weather.push_str(&format!(" to {}°C", celu));
+                                break
+                            }
+                        },
+                        _ => (),
+                    };
                 }
             }
         }
