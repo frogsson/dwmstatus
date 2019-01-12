@@ -5,30 +5,44 @@ use chrono::{Local};
 use reqwest::{get};
 use std::process::Command;
 use std::string::String;
-use std::thread::{sleep};
-use std::time::{Duration, SystemTime};
+use std::thread;
+use std::time::Duration;
+use std::sync::{Mutex, Arc};
+
+const CITY: &str = "Orebro";
 
 fn main() {
-    let update_weather = Duration::from_secs(3600);
-    let mut last_weather_update = SystemTime::now();
-    let mut weather = String::from(get_weather());
+    let time = Arc::new(Mutex::new(String::new()));
+    let weather = Arc::new(Mutex::new(String::new()));
+    let mut output = String::new();
 
+    let timecpy = time.clone();
+    thread::spawn(move || {
+        get_time(timecpy);
+    });
+
+    let weathercpy = weather.clone();
+    thread::spawn(move || {
+        get_weather(weathercpy);
+    });
+
+    // give threads some initial time
+    thread::sleep(Duration::from_secs(2));
     loop {
-        let mut output = String::new();
-
-        if last_weather_update.elapsed().unwrap() >= update_weather {
-            weather = get_weather();
-            last_weather_update = SystemTime::now()
+        {
+            let t = time.lock().unwrap();
+            let w = weather.lock().unwrap();
+            output.clear();
+            output.push_str(&w);
+            output.push_str(&format!(" {}", t));
         }
 
-        output.push_str(&weather);
-        output.push_str(&format!(" {}", get_timedate()));
-        call(output);
-        sleep(Duration::from_secs(60));
+        call(&output);
+        thread::sleep(Duration::from_secs(60));
     }
 }
 
-fn call(out: String) {
+fn call(out: &str) {
     Command::new("xsetroot")
         .arg("-name")
         .arg(out)
@@ -36,46 +50,59 @@ fn call(out: String) {
         .expect("something happened");
 }
 
-fn get_timedate() -> String {
-    let current_time = Local::now().format("%A %b %Y-%m-%d %H:%M").to_string();
-    let out = String::from(
-        format!("\u{e225}{}", current_time));
-
-    out
+fn get_time(time: Arc<Mutex<String>>) {
+    loop {
+        {
+            let current_time = Local::now().format("%A %b %Y-%m-%d %H:%M").to_string();
+            let mut time = time.lock().unwrap();
+            time.clear();
+            time.push_str(&format!("\u{e225}{}", current_time));
+        }
+        thread::sleep(Duration::from_secs(60));
+    }
 }
 
-fn get_weather() -> String {
+fn get_weather(wttr: Arc<Mutex<String>>) {
     // wttr.in/:help
     // wttr.in/CITY?T0
 
-    let mut req = get("http://wttr.in/Orebro?t0").expect("404?");
-    let mut body = String::new();
+    loop {
+        {
+            let url = format!("http://wttr.in/{}?t0", CITY);
+            let mut req = get(&url).expect("404?");
+            let mut body = String::new();
 
-    if req.status().as_u16() == 200 {
-        body.push_str(&req.text().expect("error >.<"));
-    } else {
-        return "".to_string()
-    }
+            if req.status().as_u16() == 200 {
+                body.push_str(&req.text().expect("error >.<"));
+            } else {
+                continue;
+            }
 
-    let presection: Vec<&str> = body.split("<pre>").collect();
-    let mut weather = String::from("\u{e01d}");
-    let mut firstval = false;
+            let body: Vec<&str> = body.split("<pre>").collect();
 
-    for (num, line) in presection[1].split("\n").enumerate() {
-        if num == 3 {
-            let mut weathervec: Vec<&str> = line.split(">").collect();
+            let mut weather = String::from("\u{e01d}");
+            let mut firstval = false;
+
+            let body: Vec<_> = body[1].split("\n").collect();
+
+            if body.len() <= 5 {
+                // return "".to_string()
+                continue;
+            }
+
+            let mut weathervec: Vec<&str> = body[3].split(">").collect();
             let current_weather = weathervec.pop().unwrap().trim();
             weather.push_str(current_weather);
-        }
 
-        if num == 4 {
-            for val in line.split("<span") {
+            for val in body[4].split("<span") {
                 let celvec = val.split(">").collect::<Vec<&str>>();
 
                 if celvec.len() >= 2 {
+                    // println!("{}", celvec[1].split("<").collect::<Vec<&str>>()[0]);
                     let cel = celvec[1].split("<")
                         .collect::<Vec<&str>>()[0]
-                        .to_string().parse::<u32>();
+                        .to_string().parse::<i8>();
+                    // println!("{:?}", cel);
                     match cel {
                         Ok(celu) => { 
                             if !firstval {
@@ -90,7 +117,10 @@ fn get_weather() -> String {
                     };
                 }
             }
+            let mut wttr = wttr.lock().unwrap();
+            wttr.clear();
+            wttr.push_str(&weather);
         }
+        thread::sleep(Duration::from_secs(1800));
     }
-    weather
 }
