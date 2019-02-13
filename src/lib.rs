@@ -5,18 +5,15 @@ extern crate serde_json;
 use chrono::Local;
 use std::string::String;
 use std::result::Result;
-use std::error::Error;
 use std::process::Command;
 
-// wttr.in
 // api.openweathermap.org/data/2.5/weather?id=217279
 // https://api.openweathermap.org/data/2.5/weather?q=London,uk&appid=YOUR_API_KEY
-// 2686657
+// Orebro = 2686657
 
 const CITY_ID: &str = "2686657";
 
 pub fn call(out: String) {
-    println!("{}", out);
     Command::new("xsetroot")
         .arg("-name")
         .arg(out)
@@ -29,7 +26,7 @@ pub fn get_time() -> String {
     current_time
 }
 
-pub fn get_weather(api_key: &str) -> Result<String, Box<dyn Error>> {
+pub fn get_weather(api_key: &str) -> Result<String, Box<dyn std::error::Error>> {
     /* JSON_STR FORMAT
     {
     "base":"stations",
@@ -50,61 +47,21 @@ pub fn get_weather(api_key: &str) -> Result<String, Box<dyn Error>> {
     let mut weather = String::from("\u{e01d}");
 
     let url = &format!("https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}", CITY_ID, api_key);
-    let json_str = &reqwest::get(url)?.text()?; // reqwest.get()?.json()? is not able to parse for some reason 
-    println!("{}", json_str);
+    // reqwest.get()?.json()? is not able to parse for some reason 
+    let json_str = &reqwest::get(url)?.text()?; 
     let vals: serde_json::Value = serde_json::from_str(json_str)?;
-    let degrees_cel = &vals["main"]["temp"];
-    let weather_status = &vals["weather"][0]["description"].to_string();
-    let weather_status = weather_status.trim_matches('"');
 
-    weather.push_str(&format!("{} {}°C", weather_status, degrees_cel));
+    let degrees_cel = &vals["main"]["temp"];
+
+    let x = &vals["weather"][0]["description"].to_string();
+    let mut x = x.trim_matches('"').chars();
+    let weather_description = match x.next() {
+        None => String::new(),
+        Some(f) => f.to_uppercase().collect::<String>() + x.as_str(),
+    };
+
+    weather.push_str(&format!("{} {}°C", weather_description, degrees_cel));
 
     Ok(weather)
 }
 
-
-// pub fn get_weather() -> Result<String, Box<dyn Error>> {
-//     // wttr.in/:help
-//     // wttr.in/CITY?T0
-// 
-//     let url = format!("http://wttr.in/{}?t0", CITY);
-//     let mut body = String::new();
-//     let mut weather = String::from("\u{e01d}");
-//     let mut firstval = false;
-// 
-//     body.push_str(&get(&url)?.text()?);
-// 
-//     let body: Vec<&str> = body.split("<pre>").collect();
-//     let body: Vec<_> = body[1].split("\n").collect();
-// 
-//     if body.len() <= 5 {
-//         return Err(Box::from("ree"))
-//     }
-// 
-//     let mut weathervec: Vec<&str> = body[3].split(">").collect();
-//     let current_weather = weathervec.pop().unwrap().trim();
-//     weather.push_str(current_weather);
-// 
-//     for val in body[4].split("<span") {
-//         let celvec = val.split(">").collect::<Vec<&str>>();
-// 
-//         if celvec.len() >= 2 {
-//             let cel = celvec[1].split("<")
-//                 .collect::<Vec<&str>>()[0]
-//                 .to_string().parse::<i8>();
-//             match cel {
-//                 Ok(celu) => { 
-//                     if !firstval {
-//                         weather.push_str(&format!(" {}°C", celu));
-//                         firstval = true;
-//                     } else {
-//                         weather.push_str(&format!(" to {}°C", celu));
-//                         break
-//                     }
-//                 },
-//                 _ => (),
-//             };
-//         }
-//     }
-//     Ok(weather)
-// }
