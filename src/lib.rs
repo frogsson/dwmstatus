@@ -54,10 +54,9 @@ pub fn call(out: String) {
 }
 
 pub fn get_time() -> String {
-    let current_time = chrono::Local::now()
+    chrono::Local::now()
         .format("\u{e225}%A %b %Y-%m-%d %H:%M")
-        .to_string();
-    current_time
+        .to_string()
 }
 
 pub fn get_weather() -> String {
