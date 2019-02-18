@@ -6,14 +6,47 @@ use chrono::Local;
 use std::string::String;
 use std::result::Result;
 use std::process::Command;
+use std::fs;
+use std::time::{Duration, SystemTime};
 
 // api.openweathermap.org/data/2.5/weather?id=217279
 // https://api.openweathermap.org/data/2.5/weather?q=London,uk&appid=YOUR_API_KEY
-// Orebro = 2686657
+// CITY_ID Orebro = 2686657
 
 const CITY_ID: &str = "2686657";
 
+pub struct Modules {
+    weather: String,
+    weatherupdate: SystemTime,
+    time: String,
+    five_min: Duration,
+}
+
+impl Modules {
+    pub fn output(&self) -> String {
+        format!("{} {}", self.weather, self.time)
+    }
+
+    pub fn new() -> Modules {
+        Modules {
+            weather: get_weather(),
+            time: get_time(),
+            weatherupdate: SystemTime::now(),
+            five_min: Duration::from_secs(300),
+        }
+    }
+
+    pub fn update(&mut self) {
+        self.time = get_time();
+        if self.weatherupdate.elapsed().unwrap() >= self.five_min {
+            self.weather = get_weather();
+            self.weatherupdate = SystemTime::now();
+        }
+    }
+}
+
 pub fn call(out: String) {
+    // println!("{}", out);
     Command::new("xsetroot")
         .arg("-name")
         .arg(out)
@@ -26,7 +59,15 @@ pub fn get_time() -> String {
     current_time
 }
 
-pub fn get_weather(api_key: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub fn get_weather() -> String {
+        let weather = match _get_weather() {
+            Ok(s) => s,
+            Err(_) => "".to_string(),
+        };
+        weather
+}
+
+fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
     /* JSON_STR FORMAT
     {
     "base":"stations",
@@ -45,6 +86,7 @@ pub fn get_weather(api_key: &str) -> Result<String, Box<dyn std::error::Error>> 
     */
 
     let mut weather = String::from("\u{e01d}");
+    let api_key = fs::read_to_string("/home/kim/.config/rustystatus/apikey").unwrap();
 
     let url = &format!("https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}", CITY_ID, api_key);
     // reqwest.get()?.json()? is not able to parse for some reason 
