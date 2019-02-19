@@ -88,7 +88,7 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
 
     let apikey_path = match dirs::home_dir() {
         Some(mut path) => {
-            path.push(".config/rustystatys/apikey");
+            path.push(".config/rustystatus/apikey");
             path
         },
         None => panic!("could not find home directory $HOME")
@@ -96,7 +96,7 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
 
     let apikey = match std::fs::read_to_string(&apikey_path) {
         Ok(a) => a,
-        Err(_) => panic!("could not find api key in: {}/.config/rustystatys/apikey", apikey_path.to_str().unwrap())
+        Err(_) => panic!("could not find file: {}", apikey_path.to_str().unwrap())
     };
 
     let url = &format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey);
