@@ -1,6 +1,7 @@
 extern crate chrono;
 extern crate reqwest;
 extern crate serde_json;
+extern crate dirs;
 
 use std::string::String;
 use std::result::Result;
@@ -62,7 +63,7 @@ pub fn get_time() -> String {
 pub fn get_weather() -> String {
     let weather = match _get_weather() {
         Ok(s) => s,
-        Err(_) => "".to_string(),
+        Err(_) => "".to_string()
     };
     weather
 }
@@ -85,18 +86,37 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
     }
     */
 
-    let api_key = std::fs::read_to_string("/home/kim/.config/rustystatus/apikey").unwrap();
+    let apikey_path = match dirs::home_dir() {
+        Some(mut path) => {
+            path.push(".config/rustystatys/apikey");
+            path
+        },
+        None => panic!("Could not find home directory $HOME")
+    };
 
-    let url = &format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", api_key);
-    let j: serde_json::Value = reqwest::get(url)?.json()?;
+    let apikey = match std::fs::read_to_string(&apikey_path) {
+        Ok(a) => a,
+        Err(_) => panic!("could not find api key in: {}/.config/rustystatys/apikey", apikey_path.to_str().unwrap())
+    };
 
-    let degrees_cel = &j["main"]["temp"];
+    let url = &format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey);
+    let mut j: serde_json::Value = reqwest::get(url)?.json()?;
 
-    let x = &j["weather"][0]["description"].to_string();
-    let mut x = x.trim_matches('"').chars();
+    let degrees_cel = j.pointer("/main/temp")
+        .unwrap()
+        .as_i64()
+        .unwrap();
+
+    let mut x = j.pointer_mut("/weather/0/description")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .trim_matches('"')
+        .chars();
+
     let weather_description = match x.next() {
         None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + x.as_str(),
+        Some(f) => f.to_uppercase().collect::<String>() + x.as_str()
     };
 
     Ok(format!("\u{e01d}{} {}°C", weather_description, degrees_cel))
