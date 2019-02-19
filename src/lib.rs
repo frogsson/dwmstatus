@@ -54,13 +54,13 @@ pub fn call(out: String) {
         .expect("something happened");
 }
 
-pub fn get_time() -> String {
+fn get_time() -> String {
     chrono::Local::now()
         .format("\u{e225}%A %b %Y-%m-%d %H:%M")
         .to_string()
 }
 
-pub fn get_weather() -> String {
+fn get_weather() -> String {
     let weather = match _get_weather() {
         Ok(s) => s,
         Err(_) => "".to_string()
@@ -91,7 +91,7 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
             path.push(".config/rustystatys/apikey");
             path
         },
-        None => panic!("Could not find home directory $HOME")
+        None => panic!("could not find home directory $HOME")
     };
 
     let apikey = match std::fs::read_to_string(&apikey_path) {
