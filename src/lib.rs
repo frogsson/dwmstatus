@@ -13,6 +13,9 @@ https://api.openweathermap.org/data/2.5/weather?q={CITY_ID}&appid={API_KEY}
 
 API KEY
 $HOME/.config/rustystatus/apikey
+
+add crate failure
+https://rust-lang-nursery.github.io/cli-wg/tutorial/errors.html
 */
 
 pub struct Modules {
@@ -27,19 +30,19 @@ impl Modules {
         format!("{} {}", self.weather, self.time)
     }
 
-    pub fn new() -> Modules {
+    pub fn new(u: &String) -> Modules {
         Modules {
-            weather: get_weather(),
+            weather: get_weather(u),
             time: get_time(),
             weatherupdate: SystemTime::now(),
             five_min: Duration::from_secs(300),
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, u: &String) {
         self.time = get_time();
         if self.weatherupdate.elapsed().unwrap() >= self.five_min {
-            self.weather = get_weather();
+            self.weather = get_weather(u);
             self.weatherupdate = SystemTime::now();
         }
     }
@@ -60,15 +63,38 @@ fn get_time() -> String {
         .to_string()
 }
 
-fn get_weather() -> String {
-    let weather = match _get_weather() {
+pub fn format_url() -> String {
+    let apikey_path = match dirs::home_dir() {
+        Some(mut path) => {
+            path.push(".config/rustystatus/apikey");
+            path
+        },
+        None => {
+            eprintln!("Error: Missing home directory definition `$HOME`");
+            std::process::exit(0x0100);
+        },
+    };
+
+    let apikey = match std::fs::read_to_string(&apikey_path) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("Error: `{}` {}", apikey_path.to_str().unwrap(), e);
+            std::process::exit(0x0100);
+        },
+    };
+
+    format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey)
+}
+
+fn get_weather(u: &String) -> String {
+    let weather = match _get_weather(u) {
         Ok(s) => s,
-        Err(_) => "".to_string()
+        Err(_) => "".to_string(),
     };
     weather
 }
 
-fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
+fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
     /* JSON_STR FORMAT
     {
         "base":"stations",
@@ -86,21 +112,7 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
     }
     */
 
-    let apikey_path = match dirs::home_dir() {
-        Some(mut path) => {
-            path.push(".config/rustystatus/apikey");
-            path
-        },
-        None => panic!("could not find home directory $HOME")
-    };
-
-    let apikey = match std::fs::read_to_string(&apikey_path) {
-        Ok(a) => a,
-        Err(_) => panic!("could not find file: {}", apikey_path.to_str().unwrap())
-    };
-
-    let url = &format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey);
-    let mut j: serde_json::Value = reqwest::get(url)?.json()?;
+    let mut j: serde_json::Value = reqwest::get(u)?.json()?;
 
     let degrees_cel = j.pointer("/main/temp")
         .unwrap()
@@ -116,7 +128,7 @@ fn _get_weather() -> Result<String, Box<dyn std::error::Error>> {
 
     let weather_description = match x.next() {
         None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + x.as_str()
+        Some(f) => f.to_uppercase().collect::<String>() + x.as_str(),
     };
 
     Ok(format!("\u{e01d}{} {}°C", weather_description, degrees_cel))
