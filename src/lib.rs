@@ -127,10 +127,14 @@ fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
 
     let mut j: serde_json::Value = reqwest::get(u)?.json()?;
 
+    // 190206
+    // didn't think the api would ever change but it did today
+    // so need to figure out a better way to parse
     let degrees_cel = j.pointer("/main/temp")
         .unwrap()
-        .as_i64()
-        .unwrap();
+        .as_f64()
+        .unwrap()
+        .round() as i8;
 
     let mut x = j.pointer_mut("/weather/0/description")
         .unwrap()
