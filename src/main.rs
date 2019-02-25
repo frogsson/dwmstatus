@@ -5,11 +5,13 @@ use std::time::Duration;
 
 fn main() {
     let url = rustystatus::format_url();
-    let mut modules = rustystatus::Modules::new(&url);
+    let mut modules = rustystatus::Modules::new();
     let five_sec = Duration::from_secs(5);
 
     loop {
-        modules.update(&url);
+        modules.update_time();
+        modules.update_weather(&url);
+
         rustystatus::call(modules.output());
         sleep(five_sec);
     }

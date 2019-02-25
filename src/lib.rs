@@ -20,7 +20,7 @@ https://rust-lang-nursery.github.io/cli-wg/tutorial/errors.html
 
 pub struct Modules {
     weather: String,
-    weatherupdate: SystemTime,
+    last_update: Option<SystemTime>,
     time: String,
     five_min: Duration,
 }
@@ -30,20 +30,37 @@ impl Modules {
         format!("{} {}", self.weather, self.time)
     }
 
-    pub fn new(u: &String) -> Modules {
+    pub fn new() -> Modules {
         Modules {
-            weather: get_weather(u),
-            time: get_time(),
-            weatherupdate: SystemTime::now(),
+            weather: String::new(),
+            time: String::new(),
+            last_update: None,
             five_min: Duration::from_secs(300),
         }
     }
 
-    pub fn update(&mut self, u: &String) {
+    pub fn update_time(&mut self) {
         self.time = get_time();
-        if self.weatherupdate.elapsed().unwrap() >= self.five_min {
+    }
+
+    pub fn update_weather(&mut self, u: &String) {
+        // check if last_update has a value
+        if let Some(e) = self.last_update {
+            match e.elapsed() {
+                // updates weather if five minutes has passed
+                Ok(s) => {
+                    if s >= self.five_min {
+                        self.weather = get_weather(u);
+                        self.last_update = Some(SystemTime::now());
+                    }
+                },
+                Err(_) => self.last_update = None,
+            }
+        // if last_update does not have a value then give it one
+        // and also update weather
+        } else {
+            self.last_update = Some(SystemTime::now());
             self.weather = get_weather(u);
-            self.weatherupdate = SystemTime::now();
         }
     }
 }
