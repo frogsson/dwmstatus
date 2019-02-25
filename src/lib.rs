@@ -44,10 +44,8 @@ impl Modules {
     }
 
     pub fn update_weather(&mut self, u: &String) {
-        // check if last_update has a value
         if let Some(e) = self.last_update {
             match e.elapsed() {
-                // updates weather if five minutes has passed
                 Ok(s) => {
                     if s >= self.five_min {
                         self.weather = get_weather(u);
@@ -56,8 +54,6 @@ impl Modules {
                 },
                 Err(_) => self.last_update = None,
             }
-        // if last_update does not have a value then give it one
-        // and also update weather
         } else {
             self.last_update = Some(SystemTime::now());
             self.weather = get_weather(u);
