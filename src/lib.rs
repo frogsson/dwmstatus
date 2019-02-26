@@ -125,28 +125,29 @@ fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
     }
     */
 
-    let mut j: serde_json::Value = reqwest::get(u)?.json()?;
+    let json: serde_json::Value = reqwest::get(u)?.json()?;
 
-    // 190206
-    // didn't think the api would ever change but it did today
-    // so need to figure out a better way to parse
-    let degrees_cel = j.pointer("/main/temp")
-        .unwrap()
-        .as_f64()
-        .unwrap()
-        .round() as i8;
+    let mut degrees_cel: Option<i8> = None;
+    if let Some(s) = json.pointer("/main/temp") {
+        if let Some(val) = s.as_f64() {
+            degrees_cel = Some(val.round() as i8);
+        }     
+    }
 
-    let mut x = j.pointer_mut("/weather/0/description")
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .trim_matches('"')
-        .chars();
+    let mut weather: Option<String> = None;
+    if let Some(s) = json.pointer("/weather/0/description") {
+        if let Some(val) = s.as_str() {
+            let mut x = val.trim_matches('"').chars();
+            if let Some(f) = x.next() {
+                weather = Some(f.to_uppercase().collect::<String>() + x.as_str());
+            }
+        }
+    }
 
-    let weather_description = match x.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + x.as_str(),
-    };
+    let mut weather_str = String::new();
+    if let (Some(x), Some(y)) = (weather, degrees_cel) {
+        weather_str.push_str(&format!("\u{e01d}{} {}°C", x, y));
+    }
 
-    Ok(format!("\u{e01d}{} {}°C", weather_description, degrees_cel))
+    Ok(weather_str)
 }
