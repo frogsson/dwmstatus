@@ -23,19 +23,42 @@ pub struct Modules {
     last_update: Option<SystemTime>,
     time: String,
     five_min: Duration,
+    net_vals: Net,
+    net_print: String,
+}
+
+#[derive(Debug)]
+pub struct Net {
+    recv: f64,
+    tran: f64,
+    recv_stack: Vec<f64>,
+    tran_stack: Vec<f64>,
+    net_time: SystemTime,
+    last_time: u64,
 }
 
 impl Modules {
     pub fn output(&self) -> String {
-        format!("{} {}", self.weather, self.time)
+        format!("{} {} {}", self.net_print, self.weather, self.time)
     }
 
     pub fn new() -> Modules {
+        let net = Net {
+            recv: 0.0,
+            tran: 0.0,
+            recv_stack: vec![0.0, 0.0, 0.0],
+            tran_stack: vec![0.0, 0.0, 0.0],
+            net_time: SystemTime::now(),
+            last_time: 5000000,
+        };
+
         Modules {
             weather: String::new(),
             time: String::new(),
             last_update: None,
             five_min: Duration::from_secs(300),
+            net_vals: net,
+            net_print: String::new(),
         }
     }
 
@@ -58,6 +81,38 @@ impl Modules {
             self.last_update = Some(SystemTime::now());
             self.weather = get_weather(u);
         }
+    }
+
+    pub fn update_net(&mut self) {
+        let mut n = parse_net_proc();
+
+        let new_time = match self.net_vals.net_time.duration_since(SystemTime::UNIX_EPOCH) {
+            Ok(n) => n.as_secs(),
+            Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+        };
+        let half = (new_time - self.net_vals.last_time) * 1000000;
+        self.net_vals.last_time = new_time;
+        self.net_vals.net_time = SystemTime::now();
+
+        let x = n.remove(0); 
+        self.net_vals.recv_stack.remove(0);
+        self.net_vals.recv_stack.push((x - self.net_vals.recv) / half as f64);
+        self.net_vals.recv = x;
+        let recv_sum: f64 = self.net_vals.recv_stack.iter().sum();
+        let recv_len: f64 = self.net_vals.recv_stack.len() as f64;
+        let recv = recv_sum / recv_len;
+
+        let y = n.remove(7); 
+        self.net_vals.tran_stack.remove(0);
+        self.net_vals.tran_stack.push((y - self.net_vals.tran) / half as f64);
+        self.net_vals.tran = y;
+        let tran_sum: f64 = self.net_vals.tran_stack.iter().sum();
+        let tran_len: f64 = self.net_vals.tran_stack.len() as f64;
+        let tran = tran_sum / tran_len;
+
+        println!("{:?}", self.net_vals);
+
+        self.net_print = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
     }
 }
 
@@ -150,4 +205,29 @@ fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
     }
 
     Ok(weather_str)
+}
+
+pub fn parse_net_proc() -> Vec<f64> {
+    let net_info = match std::fs::read_to_string("/proc/net/dev") {
+        Ok(s) => s,
+        _ => "".to_string(),
+    };
+
+    let mut n = String::new();
+    for x in net_info.split("\n") {
+        if x.contains("eno1") {
+            n = x.to_string();
+            break
+        }
+    }
+
+    let mut vals: Vec<f64> = Vec::new();
+    for x in n.trim().split_whitespace() {
+        match x.parse::<f64>() {
+            Ok(i) => vals.push(i),
+            Err(_) => (),
+        }
+    }
+
+    vals
 }
