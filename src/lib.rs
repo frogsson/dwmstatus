@@ -151,7 +151,7 @@ impl Modules {
             self.cpu.last = cpu;
             self.cpu.last_sum = cpu_sum;
 
-            self.cpu.output = format!("\u{e223}{:.2}%", cpu_usage);
+            self.cpu.output = format!("\u{e223}{:02}%", cpu_usage);
         } else {
             self.cpu.output = "".to_string();
         }
@@ -330,5 +330,5 @@ fn read_memory_proc() -> Option<String> {
     // memory available = v[1]
     let used_memory_perc = 100.0 - ((v[1] / v[0]) * 100.0);
 
-    Some(format!("\u{e021}{:.0}%", used_memory_perc))
+    Some(format!("\u{e021}{:02}%", used_memory_perc))
 }
