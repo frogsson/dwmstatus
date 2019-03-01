@@ -19,16 +19,21 @@ https://rust-lang-nursery.github.io/cli-wg/tutorial/errors.html
 */
 
 pub struct Modules {
-    weather: String,
-    last_update: Option<SystemTime>,
     time: String,
-    five_min: Duration,
-    net_vals: Net,
-    net_print: String,
+    memory: String,
+    weather: Weather,
+    net: Net,
+    cpu: Cpu,
+    update_cycle: Option<SystemTime>,
 }
 
-#[derive(Debug)]
-pub struct Net {
+struct Weather {
+    output: String,
+    five_min: Duration,
+}
+
+struct Net {
+    output: String,
     recv: f64,
     tran: f64,
     recv_stack: Vec<f64>,
@@ -37,13 +42,16 @@ pub struct Net {
     last_time: u64,
 }
 
-impl Modules {
-    pub fn output(&self) -> String {
-        format!("{} {} {}", self.net_print, self.weather, self.time)
-    }
+struct Cpu {
+    output: String,
+    last: Vec<i32>,
+    last_sum: i32,
+}
 
+impl Modules {
     pub fn new() -> Modules {
         let net = Net {
+            output: String::new(),
             recv: 0.0,
             tran: 0.0,
             recv_stack: vec![0.0, 0.0, 0.0],
@@ -52,14 +60,29 @@ impl Modules {
             last_time: 5000000,
         };
 
-        Modules {
-            weather: String::new(),
-            time: String::new(),
-            last_update: None,
+        let cpu = Cpu {
+            output: String::new(),
+            last: vec![0; 9],
+            last_sum: 0,
+        };
+
+        let weather = Weather {
+            output: String::new(),
             five_min: Duration::from_secs(300),
-            net_vals: net,
-            net_print: String::new(),
+        };
+
+        Modules {
+            weather: weather,
+            memory: String::new(),
+            time: String::new(),
+            update_cycle: None,
+            net: net,
+            cpu: cpu,
         }
+    }
+
+    pub fn output(&self) -> String {
+        format!("{} {} {} {} {}", self.net.output, self.memory, self.cpu.output, self.weather.output, self.time)
     }
 
     pub fn update_time(&mut self) {
@@ -67,52 +90,79 @@ impl Modules {
     }
 
     pub fn update_weather(&mut self, u: &String) {
-        if let Some(e) = self.last_update {
+        if let Some(e) = self.update_cycle {
             match e.elapsed() {
                 Ok(s) => {
-                    if s >= self.five_min {
-                        self.weather = get_weather(u);
-                        self.last_update = Some(SystemTime::now());
+                    if s >= self.weather.five_min {
+                        self.weather.output = get_weather(u);
+                        self.update_cycle = Some(SystemTime::now());
                     }
                 },
-                Err(_) => self.last_update = None,
+                Err(_) => self.update_cycle = None,
             }
         } else {
-            self.last_update = Some(SystemTime::now());
-            self.weather = get_weather(u);
+            self.update_cycle = Some(SystemTime::now());
+            self.weather.output = get_weather(u);
         }
     }
 
     pub fn update_net(&mut self) {
-        let mut n = parse_net_proc();
+        if let Some(mut n) = parse_net_proc() {
+            let new_time = match self.net.net_time.duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(n) => n.as_secs(),
+                Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+            };
+            let seconds_passed = (new_time - self.net.last_time) * 1000000;
+            self.net.last_time = new_time;
+            self.net.net_time = SystemTime::now();
 
-        let new_time = match self.net_vals.net_time.duration_since(SystemTime::UNIX_EPOCH) {
-            Ok(n) => n.as_secs(),
-            Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-        };
-        let half = (new_time - self.net_vals.last_time) * 1000000;
-        self.net_vals.last_time = new_time;
-        self.net_vals.net_time = SystemTime::now();
+            let x = n.remove(0); 
+            self.net.recv_stack.remove(0);
+            self.net.recv_stack.push((x - self.net.recv) / seconds_passed as f64);
+            self.net.recv = x;
+            let recv = transfer_speed_as_mb(&self.net.recv_stack);
 
-        let x = n.remove(0); 
-        self.net_vals.recv_stack.remove(0);
-        self.net_vals.recv_stack.push((x - self.net_vals.recv) / half as f64);
-        self.net_vals.recv = x;
-        let recv_sum: f64 = self.net_vals.recv_stack.iter().sum();
-        let recv_len: f64 = self.net_vals.recv_stack.len() as f64;
-        let recv = recv_sum / recv_len;
+            let y = n.remove(7); 
+            self.net.tran_stack.remove(0);
+            self.net.tran_stack.push((y - self.net.tran) / seconds_passed as f64);
+            self.net.tran = y;
+            let tran = transfer_speed_as_mb(&self.net.tran_stack);
 
-        let y = n.remove(7); 
-        self.net_vals.tran_stack.remove(0);
-        self.net_vals.tran_stack.push((y - self.net_vals.tran) / half as f64);
-        self.net_vals.tran = y;
-        let tran_sum: f64 = self.net_vals.tran_stack.iter().sum();
-        let tran_len: f64 = self.net_vals.tran_stack.len() as f64;
-        let tran = tran_sum / tran_len;
+            self.net.output = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
+        } else {
+            self.net.output = "".to_string();
+        }
+    }
 
-        println!("{:?}", self.net_vals);
+    pub fn update_cpu(&mut self) {
+        //      user    nice   system  idle      iowait irq   softirq  steal  guest  guest_nice
+        // cpu  74608   2520   24433   1117073   6176   4054  0        0      0      0
 
-        self.net_print = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
+        // explanation for this shit
+        // https://www.idnt.net/en-GB/kb/941772
+        if let Some(cpu) = get_cpu_info() {
+            let cpu_sum: i32 = cpu.iter().sum();
+
+            let cpu_delta = cpu_sum - self.cpu.last_sum;
+            let cpu_idle = cpu[3] - self.cpu.last[3];
+            let cpu_used = cpu_delta - cpu_idle;
+            let cpu_usage = 100 * cpu_used / cpu_delta;
+
+            self.cpu.last = cpu;
+            self.cpu.last_sum = cpu_sum;
+
+            self.cpu.output = format!("\u{e223}{:.2}%", cpu_usage);
+        } else {
+            self.cpu.output = "".to_string();
+        }
+    }
+
+    pub fn update_memory(&mut self) {
+        if let Some(s) = read_memory_proc() {
+            self.memory = s;
+        } else {
+            self.memory = "".to_string();
+        }
     }
 }
 
@@ -207,27 +257,78 @@ fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
     Ok(weather_str)
 }
 
-pub fn parse_net_proc() -> Vec<f64> {
+pub fn parse_net_proc() -> Option<Vec<f64>> {
     let net_info = match std::fs::read_to_string("/proc/net/dev") {
         Ok(s) => s,
-        _ => "".to_string(),
+        Err(_) => {
+            println!("Error reading /proc/net/dev");
+            return None
+        }
     };
 
-    let mut n = String::new();
-    for x in net_info.split("\n") {
-        if x.contains("eno1") {
-            n = x.to_string();
-            break
-        }
-    }
+    let vals: Vec<_> = net_info.split("\n")
+        .filter(|s| s.contains("eno1"))
+        .collect::<String>()
+        .trim()
+        .split_whitespace()
+        .filter_map(|s| s.parse::<f64>().ok())
+        .collect();
 
-    let mut vals: Vec<f64> = Vec::new();
-    for x in n.trim().split_whitespace() {
-        match x.parse::<f64>() {
-            Ok(i) => vals.push(i),
-            Err(_) => (),
-        }
-    }
+    if vals.len() < 1 { return None }
 
-    vals
+    Some(vals)
+}
+
+fn transfer_speed_as_mb(v: &Vec<f64>) -> f64 {
+    let sum: f64 = v.iter().sum();
+    let len: f64 = v.len() as f64;
+    sum / len
+}
+
+fn get_cpu_info() -> Option<Vec<i32>> {
+    let cpu_proc = match std::fs::read_to_string("/proc/stat") {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Error reading `/proc/stat`");
+            return None
+        }
+    };
+
+    let cpu = cpu_proc.split("\n")
+        .collect::<Vec<_>>()
+        .remove(0)
+        .split_whitespace()
+        .filter_map(|s| s.parse::<i32>().ok())
+        .collect::<Vec<i32>>();
+
+    Some(cpu)
+}
+
+fn read_memory_proc() -> Option<String> {
+    let cpu_proc = match std::fs::read_to_string("/proc/meminfo") {
+        Ok(s) => s,
+        Err(_) => {
+            println!("Error reading `/proc/meminfo`");
+            return None
+        }
+    };
+
+    let v: Vec<_> = cpu_proc.split("\n")
+        .filter(|s| s.contains("MemTotal") || s.contains("MemAvailable"))
+        .map(|s| {
+            let t: f32 = s.split_whitespace()
+                .filter_map(|ss| ss.parse::<f32>().ok())
+                .collect::<Vec<f32>>()
+                .remove(0);
+            t
+        })
+        .collect();
+    
+    if v.len() < 2 { return None }
+
+    // memory total = v[0]
+    // memory available = v[1]
+    let used_memory_perc = 100.0 - ((v[1] / v[0]) * 100.0);
+
+    Some(format!("\u{e021}{:.0}%", used_memory_perc))
 }

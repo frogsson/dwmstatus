@@ -12,6 +12,8 @@ fn main() {
         modules.update_time();
         modules.update_weather(&url);
         modules.update_net();
+        modules.update_cpu();
+        modules.update_memory();
 
         rustystatus::call(modules.output());
         sleep(five_sec);
