@@ -107,7 +107,7 @@ impl Modules {
     }
 
     pub fn update_net(&mut self) {
-        if let Some(mut n) = parse_net_proc() {
+        if let Some(mut n) = read_net_proc() {
             let new_time = match self.net.net_time.duration_since(SystemTime::UNIX_EPOCH) {
                 Ok(n) => n.as_secs(),
                 Err(_) => panic!("SystemTime before UNIX EPOCH!"),
@@ -140,7 +140,7 @@ impl Modules {
 
         // explanation for this shit
         // https://www.idnt.net/en-GB/kb/941772
-        if let Some(cpu) = get_cpu_info() {
+        if let Some(cpu) = read_cpu_proc() {
             let cpu_sum: i32 = cpu.iter().sum();
 
             let cpu_delta = cpu_sum - self.cpu.last_sum;
@@ -257,7 +257,7 @@ fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
     Ok(weather_str)
 }
 
-pub fn parse_net_proc() -> Option<Vec<f64>> {
+pub fn read_net_proc() -> Option<Vec<f64>> {
     let net_info = match std::fs::read_to_string("/proc/net/dev") {
         Ok(s) => s,
         Err(_) => {
@@ -285,7 +285,7 @@ fn transfer_speed_as_mb(v: &Vec<f64>) -> f64 {
     sum / len
 }
 
-fn get_cpu_info() -> Option<Vec<i32>> {
+fn read_cpu_proc() -> Option<Vec<i32>> {
     let cpu_proc = match std::fs::read_to_string("/proc/stat") {
         Ok(s) => s,
         Err(_) => {
