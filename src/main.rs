@@ -5,8 +5,8 @@ use std::time::Duration;
 
 fn main() {
     let url = rustystatus::format_url();
-    let mut modules = rustystatus::Modules::new();
-    let five_sec = Duration::from_secs(5);
+    let mut modules = rustystatus::Modules::default();
+    let one_sec = Duration::from_secs(1);
 
     loop {
         modules.update_time();
@@ -16,6 +16,6 @@ fn main() {
         modules.update_memory();
 
         rustystatus::call(modules.output());
-        sleep(five_sec);
+        sleep(one_sec);
     }
 }

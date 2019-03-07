@@ -49,35 +49,35 @@ struct Cpu {
 }
 
 impl Modules {
-    pub fn new() -> Modules {
-        let net = Net {
+    pub fn default() -> Self {
+        let n = Net {
             output: String::new(),
             recv: 0.0,
             tran: 0.0,
             recv_stack: vec![0.0, 0.0, 0.0],
             tran_stack: vec![0.0, 0.0, 0.0],
             net_time: SystemTime::now(),
-            last_time: 5000000,
+            last_time: 1,
         };
 
-        let cpu = Cpu {
+        let c = Cpu {
             output: String::new(),
             last: vec![0; 9],
             last_sum: 0,
         };
 
-        let weather = Weather {
+        let w = Weather {
             output: String::new(),
             five_min: Duration::from_secs(300),
         };
 
-        Modules {
-            weather: weather,
+        Self {
+            weather: w,
             memory: String::new(),
             time: String::new(),
             update_cycle: None,
-            net: net,
-            cpu: cpu,
+            net: n,
+            cpu: c,
         }
     }
 
@@ -89,12 +89,16 @@ impl Modules {
         self.time = get_time();
     }
 
-    pub fn update_weather(&mut self, u: &String) {
+    pub fn update_weather(&mut self, u: &str) {
         if let Some(e) = self.update_cycle {
             match e.elapsed() {
                 Ok(s) => {
                     if s >= self.weather.five_min {
-                        self.weather.output = get_weather(u);
+                        // self.weather.output = get_weather(u);
+                        self.weather.output = match get_weather(u) {
+                            Ok(s) => s,
+                            Err(_) => "".to_string(),
+                        };
                         self.update_cycle = Some(SystemTime::now());
                     }
                 },
@@ -102,7 +106,11 @@ impl Modules {
             }
         } else {
             self.update_cycle = Some(SystemTime::now());
-            self.weather.output = get_weather(u);
+            // self.weather.output = get_weather(u);
+            self.weather.output = match get_weather(u) {
+                Ok(s) => s,
+                Err(_) => "".to_string(),
+            };
         }
     }
 
@@ -110,9 +118,9 @@ impl Modules {
         if let Some(mut n) = read_net_proc() {
             let new_time = match self.net.net_time.duration_since(SystemTime::UNIX_EPOCH) {
                 Ok(n) => n.as_secs(),
-                Err(_) => panic!("SystemTime before UNIX EPOCH!"),
+                _ => panic!("SystemTime before UNIX EPOCH!"),
             };
-            let seconds_passed = (new_time - self.net.last_time) * 1000000;
+            let seconds_passed = (new_time - self.net.last_time) * 1_000_000;
             self.net.last_time = new_time;
             self.net.net_time = SystemTime::now();
 
@@ -204,15 +212,7 @@ pub fn format_url() -> String {
     format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey)
 }
 
-fn get_weather(u: &String) -> String {
-    let weather = match _get_weather(u) {
-        Ok(s) => s,
-        Err(_) => "".to_string(),
-    };
-    weather
-}
-
-fn _get_weather(u: &String) -> Result<String, Box<dyn std::error::Error>> {
+fn get_weather(u: &str) -> Result<String, Box<dyn std::error::Error>> {
     /* JSON_STR FORMAT
     {
         "base":"stations",
@@ -266,7 +266,7 @@ pub fn read_net_proc() -> Option<Vec<f64>> {
         }
     };
 
-    let vals: Vec<_> = net_info.split("\n")
+    let vals: Vec<_> = net_info.split('\n')
         .filter(|s| s.contains("eno1"))
         .collect::<String>()
         .trim()
@@ -274,12 +274,12 @@ pub fn read_net_proc() -> Option<Vec<f64>> {
         .filter_map(|s| s.parse::<f64>().ok())
         .collect();
 
-    if vals.len() < 1 { return None }
+    if vals.is_empty() { return None }
 
     Some(vals)
 }
 
-fn transfer_speed_as_mb(v: &Vec<f64>) -> f64 {
+fn transfer_speed_as_mb(v: &[f64]) -> f64 {
     let sum: f64 = v.iter().sum();
     let len: f64 = v.len() as f64;
     sum / len
@@ -294,7 +294,7 @@ fn read_cpu_proc() -> Option<Vec<i32>> {
         }
     };
 
-    let cpu = cpu_proc.split("\n")
+    let cpu = cpu_proc.split('\n')
         .collect::<Vec<_>>()
         .remove(0)
         .split_whitespace()
@@ -313,7 +313,7 @@ fn read_memory_proc() -> Option<String> {
         }
     };
 
-    let v: Vec<_> = cpu_proc.split("\n")
+    let v: Vec<_> = cpu_proc.split('\n')
         .filter(|s| s.contains("MemTotal") || s.contains("MemAvailable"))
         .map(|s| {
             let t: f32 = s.split_whitespace()
