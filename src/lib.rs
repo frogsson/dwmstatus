@@ -94,23 +94,15 @@ impl Modules {
             match e.elapsed() {
                 Ok(s) => {
                     if s >= self.weather.five_min {
-                        // self.weather.output = get_weather(u);
-                        self.weather.output = match get_weather(u) {
-                            Ok(s) => s,
-                            Err(_) => "".to_string(),
-                        };
+                        self.weather.output = get_weather(u);
                         self.update_cycle = Some(SystemTime::now());
                     }
                 },
                 Err(_) => self.update_cycle = None,
             }
         } else {
+            self.weather.output = get_weather(u);
             self.update_cycle = Some(SystemTime::now());
-            // self.weather.output = get_weather(u);
-            self.weather.output = match get_weather(u) {
-                Ok(s) => s,
-                Err(_) => "".to_string(),
-            };
         }
     }
 
@@ -212,7 +204,14 @@ pub fn format_url() -> String {
     format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey)
 }
 
-fn get_weather(u: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn get_weather(u: &str) -> String {
+    match _get_weather(u) {
+        Ok(s) => s,
+        Err(_) => "".to_string(),
+    }
+}
+
+fn _get_weather(u: &str) -> Result<String, Box<dyn std::error::Error>> {
     /* JSON_STR FORMAT
     {
         "base":"stations",
