@@ -5,7 +5,7 @@ extern crate dirs;
 
 use std::string::String;
 use std::result::Result;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant};
 
 /*
 https://home.openweathermap.org
@@ -24,10 +24,11 @@ pub struct Modules {
     weather: Weather,
     net: Net,
     cpu: Cpu,
-    update_cycle: Option<SystemTime>,
+    last_update: Instant,
 }
 
 struct Weather {
+    url: String,
     output: String,
     five_min: Duration,
 }
@@ -38,8 +39,7 @@ struct Net {
     tran: f64,
     recv_stack: Vec<f64>,
     tran_stack: Vec<f64>,
-    net_time: SystemTime,
-    last_time: u64,
+    net_time: Instant,
 }
 
 struct Cpu {
@@ -56,8 +56,7 @@ impl Modules {
             tran: 0.0,
             recv_stack: vec![0.0, 0.0, 0.0],
             tran_stack: vec![0.0, 0.0, 0.0],
-            net_time: SystemTime::now(),
-            last_time: 1,
+            net_time: Instant::now(),
         };
 
         let c = Cpu {
@@ -66,8 +65,11 @@ impl Modules {
             last_sum: 0,
         };
 
+        let u = format_url();
+
         let w = Weather {
-            output: String::new(),
+            url: u.clone(),
+            output: get_weather(&u).unwrap_or_default(),
             five_min: Duration::from_secs(300),
         };
 
@@ -75,7 +77,7 @@ impl Modules {
             weather: w,
             memory: String::new(),
             time: String::new(),
-            update_cycle: None,
+            last_update: Instant::now(),
             net: n,
             cpu: c,
         }
@@ -89,32 +91,17 @@ impl Modules {
         self.time = get_time();
     }
 
-    pub fn update_weather(&mut self, u: &str) {
-        if let Some(e) = self.update_cycle {
-            match e.elapsed() {
-                Ok(s) => {
-                    if s >= self.weather.five_min {
-                        self.weather.output = get_weather(u);
-                        self.update_cycle = Some(SystemTime::now());
-                    }
-                },
-                Err(_) => self.update_cycle = None,
-            }
-        } else {
-            self.weather.output = get_weather(u);
-            self.update_cycle = Some(SystemTime::now());
+    pub fn update_weather(&mut self) {
+        if self.last_update.elapsed() >= self.weather.five_min {
+            self.weather.output = get_weather(&self.weather.url).unwrap_or_default();
+            self.last_update = Instant::now();
         }
     }
 
     pub fn update_net(&mut self) {
         if let Some(mut n) = read_net_proc() {
-            let new_time = match self.net.net_time.duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(n) => n.as_secs(),
-                _ => panic!("SystemTime before UNIX EPOCH!"),
-            };
-            let seconds_passed = (new_time - self.net.last_time) * 1_000_000;
-            self.net.last_time = new_time;
-            self.net.net_time = SystemTime::now();
+            let seconds_passed = self.net.net_time.elapsed().as_secs() * 1_000_000;
+            self.net.net_time = Instant::now();
 
             let x = n.remove(0); 
             self.net.recv_stack.remove(0);
@@ -158,11 +145,7 @@ impl Modules {
     }
 
     pub fn update_memory(&mut self) {
-        if let Some(s) = read_memory_proc() {
-            self.memory = s;
-        } else {
-            self.memory = "".to_string();
-        }
+        self.memory = read_memory_proc().unwrap_or_default();
     }
 }
 
@@ -196,7 +179,7 @@ pub fn format_url() -> String {
     let apikey = match std::fs::read_to_string(&apikey_path) {
         Ok(a) => a,
         Err(e) => {
-            eprintln!("Error: `{}` {}", apikey_path.to_str().unwrap(), e);
+            eprintln!("Error: `{}` {}", apikey_path.to_str().unwrap_or("$HOME"), e);
             std::process::exit(0x0100);
         },
     };
@@ -204,15 +187,12 @@ pub fn format_url() -> String {
     format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey)
 }
 
-fn get_weather(u: &str) -> String {
-    match _get_weather(u) {
-        Ok(s) => s,
-        Err(_) => "".to_string(),
-    }
+fn fetch_json(u: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    Ok(reqwest::get(u)?.json()?)
 }
 
-fn _get_weather(u: &str) -> Result<String, Box<dyn std::error::Error>> {
-    /* JSON_STR FORMAT
+fn get_weather(u: &str) -> Option<String> {
+    /* JSON FORMAT
     {
         "base":"stations",
         "clouds":{"all":75},
@@ -229,38 +209,36 @@ fn _get_weather(u: &str) -> Result<String, Box<dyn std::error::Error>> {
     }
     */
 
-    let json: serde_json::Value = reqwest::get(u)?.json()?;
+    let json: serde_json::Value = match fetch_json(u) {
+        Ok(j) => j,
+        Err(e) => {
+            println!("{}", e);
+            return None
+        },
+    };
 
-    let mut degrees_cel: Option<i8> = None;
-    if let Some(s) = json.pointer("/main/temp") {
-        if let Some(val) = s.as_f64() {
-            degrees_cel = Some(val.round() as i8);
-        }     
-    }
+    let degrees_cel: Option<i8> = json.pointer("/main/temp")
+        .and_then(|n| n.as_f64().and_then(|f| Some(f.round() as i8)));
 
-    let mut weather: Option<String> = None;
-    if let Some(s) = json.pointer("/weather/0/description") {
-        if let Some(val) = s.as_str() {
-            let mut x = val.trim_matches('"').chars();
-            if let Some(f) = x.next() {
-                weather = Some(f.to_uppercase().collect::<String>() + x.as_str());
-            }
-        }
-    }
+    let weather: Option<String> = json.pointer("/weather/0/description")
+        .and_then(|s| s.as_str().and_then(|ss| {
+            let mut x = ss.trim_matches('"').chars();
+            x.next().and_then(|f| Some(f.to_uppercase().collect::<String>() + x.as_str()))
+        }));
 
     let mut weather_str = String::new();
     if let (Some(x), Some(y)) = (weather, degrees_cel) {
         weather_str.push_str(&format!("\u{e01d}{} {}°C", x, y));
     }
 
-    Ok(weather_str)
+    Some(weather_str)
 }
 
 pub fn read_net_proc() -> Option<Vec<f64>> {
     let net_info = match std::fs::read_to_string("/proc/net/dev") {
         Ok(s) => s,
-        Err(_) => {
-            println!("Error reading /proc/net/dev");
+        Err(e) => {
+            println!("`/proc/net/dev` {}", e);
             return None
         }
     };
@@ -287,8 +265,8 @@ fn transfer_speed_as_mb(v: &[f64]) -> f64 {
 fn read_cpu_proc() -> Option<Vec<i32>> {
     let cpu_proc = match std::fs::read_to_string("/proc/stat") {
         Ok(s) => s,
-        Err(_) => {
-            println!("Error reading `/proc/stat`");
+        Err(e) => {
+            println!("`/proc/stat` {}", e);
             return None
         }
     };
@@ -306,8 +284,8 @@ fn read_cpu_proc() -> Option<Vec<i32>> {
 fn read_memory_proc() -> Option<String> {
     let cpu_proc = match std::fs::read_to_string("/proc/meminfo") {
         Ok(s) => s,
-        Err(_) => {
-            println!("Error reading `/proc/meminfo`");
+        Err(e) => {
+            println!("`/proc/meminfo` {}", e);
             return None
         }
     };
