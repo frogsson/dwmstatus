@@ -18,6 +18,7 @@ add crate failure
 https://rust-lang-nursery.github.io/cli-wg/tutorial/errors.html
 */
 
+#[derive(Debug)]
 pub struct Modules {
     time: String,
     memory: String,
@@ -27,21 +28,24 @@ pub struct Modules {
     last_update: Instant,
 }
 
+#[derive(Debug)]
 struct Weather {
     url: String,
     output: String,
     five_min: Duration,
 }
 
+#[derive(Debug)]
 struct Net {
     output: String,
-    recv: f64,
-    tran: f64,
-    recv_stack: Vec<f64>,
-    tran_stack: Vec<f64>,
+    recv: f32,
+    tran: f32,
+    recv_stack: Vec<f32>,
+    tran_stack: Vec<f32>,
     net_time: Instant,
 }
 
+#[derive(Debug)]
 struct Cpu {
     output: String,
     system: i32,
@@ -84,6 +88,7 @@ impl Modules {
     }
 
     pub fn output(&self) -> String {
+        println!("{:?}", self);
         format!("{} {} {} {} {}", self.net.output, self.memory, self.cpu.output, self.weather.output, self.time)
     }
 
@@ -102,16 +107,18 @@ impl Modules {
         if let Some(n) = read_net_proc() {
             let seconds_passed = self.net.net_time.elapsed().as_secs() * 1_000_000;
 
-            let x = n[0]; 
-            self.net.recv_stack.remove(0);
-            self.net.recv_stack.push((x - self.net.recv) / seconds_passed as f64);
-            self.net.recv = x;
+            if let Some(x) = n.get(0) {
+                self.net.recv_stack.remove(0);
+                self.net.recv_stack.push((x - self.net.recv) / seconds_passed as f32);
+                self.net.recv = *x;
+            }
             let recv = transfer_speed_as_mb(&self.net.recv_stack);
 
-            let y = n[8]; 
-            self.net.tran_stack.remove(0);
-            self.net.tran_stack.push((y - self.net.tran) / seconds_passed as f64);
-            self.net.tran = y;
+            if let Some(y) = n.get(8) {
+                self.net.tran_stack.remove(0);
+                self.net.tran_stack.push((y - self.net.tran) / seconds_passed as f32);
+                self.net.tran = *y;
+            }
             let tran = transfer_speed_as_mb(&self.net.tran_stack);
 
             self.net.output = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
@@ -236,7 +243,7 @@ fn get_weather(u: &str) -> Option<String> {
     Some(weather_str)
 }
 
-pub fn read_net_proc() -> Option<Vec<f64>> {
+pub fn read_net_proc() -> Option<Vec<f32>> {
     let net_info = match std::fs::read_to_string("/proc/net/dev") {
         Ok(s) => s,
         Err(e) => {
@@ -250,7 +257,7 @@ pub fn read_net_proc() -> Option<Vec<f64>> {
         .collect::<String>()
         .trim()
         .split_whitespace()
-        .filter_map(|s| s.parse::<f64>().ok())
+        .filter_map(|s| s.parse::<f32>().ok())
         .collect();
 
     if vals.is_empty() { return None }
@@ -258,9 +265,9 @@ pub fn read_net_proc() -> Option<Vec<f64>> {
     Some(vals)
 }
 
-fn transfer_speed_as_mb(v: &[f64]) -> f64 {
-    let sum: f64 = v.iter().sum();
-    let len: f64 = v.len() as f64;
+fn transfer_speed_as_mb(v: &[f32]) -> f32 {
+    let sum: f32 = v.iter().sum();
+    let len: f32 = v.len() as f32;
     sum / len
 }
 
@@ -274,7 +281,8 @@ fn read_cpu_proc() -> Option<Vec<i32>> {
     };
 
     let cpu = cpu_proc.split('\n')
-        .collect::<Vec<_>>()[0]
+        .nth(0)
+        .unwrap()
         .split_whitespace()
         .filter_map(|s| s.parse::<i32>().ok())
         .collect::<Vec<i32>>();
@@ -296,7 +304,8 @@ fn read_memory_proc() -> Option<String> {
         .map(|s| {
             let t: f32 = s.split_whitespace()
                 .filter_map(|ss| ss.parse::<f32>().ok())
-                .collect::<Vec<f32>>()[0];
+                .nth(0)
+                .unwrap_or_default();
             t
         })
         .collect();
