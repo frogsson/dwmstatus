@@ -4,7 +4,6 @@ extern crate serde_json;
 extern crate dirs;
 
 use std::string::String;
-use std::result::Result;
 use std::time::{Duration, Instant};
 
 /*
@@ -18,7 +17,6 @@ add crate failure
 https://rust-lang-nursery.github.io/cli-wg/tutorial/errors.html
 */
 
-#[derive(Debug)]
 pub struct Modules {
     time: String,
     memory: String,
@@ -28,14 +26,12 @@ pub struct Modules {
     last_update: Instant,
 }
 
-#[derive(Debug)]
 struct Weather {
     url: String,
     output: String,
     five_min: Duration,
 }
 
-#[derive(Debug)]
 struct Net {
     output: String,
     recv: f32,
@@ -45,7 +41,6 @@ struct Net {
     net_time: Instant,
 }
 
-#[derive(Debug)]
 struct Cpu {
     output: String,
     system: i32,
@@ -88,7 +83,6 @@ impl Modules {
     }
 
     pub fn output(&self) -> String {
-        println!("{:?}", self);
         format!("{} {} {} {} {}", self.net.output, self.memory, self.cpu.output, self.weather.output, self.time)
     }
 
@@ -196,10 +190,6 @@ pub fn format_url() -> String {
     format!("https://api.openweathermap.org/data/2.5/weather?id=2686657&units=metric&appid={}", apikey)
 }
 
-fn fetch_json(u: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    Ok(reqwest::get(u)?.json()?)
-}
-
 fn get_weather(u: &str) -> Option<String> {
     /* JSON FORMAT
     {
@@ -218,7 +208,15 @@ fn get_weather(u: &str) -> Option<String> {
     }
     */
 
-    let json: serde_json::Value = match fetch_json(u) {
+    let mut req = match reqwest::get(u) {
+        Ok(r) => r,
+        Err(e) => {
+            println!("{}", e);
+            return None
+        },
+    };
+ 
+    let json: serde_json::Value = match req.json() {
         Ok(j) => j,
         Err(e) => {
             println!("{}", e);
