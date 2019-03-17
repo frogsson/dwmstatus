@@ -99,17 +99,17 @@ impl Modules {
     }
 
     pub fn update_net(&mut self) {
-        if let Some(mut n) = read_net_proc() {
+        if let Some(n) = read_net_proc() {
             let seconds_passed = self.net.net_time.elapsed().as_secs() * 1_000_000;
             self.net.net_time = Instant::now();
 
-            let x = n.remove(0); 
+            let x = n[0]; 
             self.net.recv_stack.remove(0);
             self.net.recv_stack.push((x - self.net.recv) / seconds_passed as f64);
             self.net.recv = x;
             let recv = transfer_speed_as_mb(&self.net.recv_stack);
 
-            let y = n.remove(7); 
+            let y = n[8]; 
             self.net.tran_stack.remove(0);
             self.net.tran_stack.push((y - self.net.tran) / seconds_passed as f64);
             self.net.tran = y;
@@ -274,8 +274,7 @@ fn read_cpu_proc() -> Option<Vec<i32>> {
     };
 
     let cpu = cpu_proc.split('\n')
-        .collect::<Vec<_>>()
-        .remove(0)
+        .collect::<Vec<_>>()[0]
         .split_whitespace()
         .filter_map(|s| s.parse::<i32>().ok())
         .collect::<Vec<i32>>();
@@ -297,8 +296,7 @@ fn read_memory_proc() -> Option<String> {
         .map(|s| {
             let t: f32 = s.split_whitespace()
                 .filter_map(|ss| ss.parse::<f32>().ok())
-                .collect::<Vec<f32>>()
-                .remove(0);
+                .collect::<Vec<f32>>()[0];
             t
         })
         .collect();
