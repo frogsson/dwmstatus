@@ -101,7 +101,6 @@ impl Modules {
     pub fn update_net(&mut self) {
         if let Some(n) = read_net_proc() {
             let seconds_passed = self.net.net_time.elapsed().as_secs() * 1_000_000;
-            self.net.net_time = Instant::now();
 
             let x = n[0]; 
             self.net.recv_stack.remove(0);
@@ -116,6 +115,7 @@ impl Modules {
             let tran = transfer_speed_as_mb(&self.net.tran_stack);
 
             self.net.output = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
+            self.net.net_time = Instant::now();
         } else {
             self.net.output = "".to_string();
         }
