@@ -44,7 +44,7 @@ struct Net {
 
 struct Cpu {
     output: String,
-    last: Vec<i32>,
+    system: i32,
     last_sum: i32,
 }
 
@@ -61,7 +61,7 @@ impl Modules {
 
         let c = Cpu {
             output: String::new(),
-            last: vec![0; 9],
+            system: 0,
             last_sum: 0,
         };
 
@@ -130,12 +130,14 @@ impl Modules {
         if let Some(cpu) = read_cpu_proc() {
             let cpu_sum: i32 = cpu.iter().sum();
 
+            let s = cpu[3];
+
             let cpu_delta = cpu_sum - self.cpu.last_sum;
-            let cpu_idle = cpu[3] - self.cpu.last[3];
+            let cpu_idle = s - self.cpu.system;
             let cpu_used = cpu_delta - cpu_idle;
             let cpu_usage = 100 * cpu_used / cpu_delta;
 
-            self.cpu.last = cpu;
+            self.cpu.system = s;
             self.cpu.last_sum = cpu_sum;
 
             self.cpu.output = format!("\u{e223}{:02}%", cpu_usage);
