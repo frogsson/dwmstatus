@@ -1,0 +1,16 @@
+output_separator = " "
+
+# available modules
+# "netspeed", "memory", "cpu", "weather", "time"
+output_order = [
+	"netspeed",
+	"memory",
+	"cpu",
+	"weather",
+	"time",
+]
+
+# get your api key from:
+# https://openweathermap.org/
+weather_apikey = ""
+weather_city = ""
