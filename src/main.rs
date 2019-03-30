@@ -5,7 +5,7 @@ use std::time::Duration;
 use rustystatus::{parse_output_order, call, read_config, Modules, ModuleName};
 
 fn main() {
-    let config = read_config(); // GET RID OF
+    let config = read_config();
 
     let one_sec = Duration::from_secs(1);
     let order = parse_output_order(config["output_order"].as_array());
