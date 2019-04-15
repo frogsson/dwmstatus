@@ -8,10 +8,11 @@ pub struct Net {
     recv_stack: Vec<f32>,
     tran_stack: Vec<f32>,
     net_time: Instant,
+    interface: String,
 }
 
 impl Net {
-    pub fn init() -> Net {
+    pub fn init(i: String) -> Net {
         Net {
             val: String::new(),
             recv: 0.0,
@@ -19,11 +20,12 @@ impl Net {
             recv_stack: vec![0.0, 0.0, 0.0],
             tran_stack: vec![0.0, 0.0, 0.0],
             net_time: Instant::now(),
+            interface: i,
         }
     }
 
     pub fn update(&mut self) {
-        if let Some(i) = read_net_proc() {
+        if let Some(i) = read_net_proc(&self.interface) {
             let seconds_passed = self.net_time.elapsed().as_secs() * 1_000_000;
 
             if let Some(x) = i.get(0) {
@@ -52,7 +54,7 @@ impl Net {
     }
 }
 
-pub fn read_net_proc() -> Option<Vec<f32>> {
+pub fn read_net_proc(interface: &str) -> Option<Vec<f32>> {
     let net_info = match std::fs::read_to_string("/proc/net/dev") {
         Ok(s) => s,
         Err(e) => {
@@ -62,7 +64,7 @@ pub fn read_net_proc() -> Option<Vec<f32>> {
     };
 
     let vals: Vec<_> = net_info.split('\n')
-        .filter(|s| s.contains("eno1"))
+        .filter(|s| s.contains(interface))
         .collect::<String>()
         .trim()
         .split_whitespace()

@@ -29,8 +29,8 @@ pub struct Modules {
 }
 
 impl Modules {
-    pub fn init(cfg: toml::Value, contains_weather: bool) -> Modules {
-        let url = if contains_weather {
+    pub fn init(cfg: toml::Value, order: &[ModuleName]) -> Modules {
+        let url = if order.contains(&ModuleName::Weather) {
             let apikey = match cfg["weather_apikey"].as_str() {
                 Some(s) => s,
                 None => {
@@ -52,9 +52,21 @@ impl Modules {
             String::new()
         };
 
+        let net_interface = if order.contains(&ModuleName::Net) {
+            match cfg["net_interface"].as_str() {
+                Some(s) => s.to_string(),
+                None => {
+                    eprintln!("net_interface not found for net module in output");
+                    std::process::exit(0x0100);
+                },
+            }
+        } else {
+            String::new()
+        };
+
         Modules {
             time: datetime::Time::init(),
-            net: net::Net::init(),
+            net: net::Net::init(net_interface),
             cpu: cpu::Cpu::init(),
             mem: mem::Mem::init(),
             weather: weather::Weather::init(url),

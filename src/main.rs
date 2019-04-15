@@ -11,7 +11,7 @@ fn main() {
     let order = parse_output_order(config["output_order"].as_array());
     let separator = config["output_separator"].as_str().unwrap_or(" ").to_string();
 
-    let mut modules = Modules::init(config, order.contains(&ModuleName::Weather));
+    let mut modules = Modules::init(config, &order);
     let mut output = String::new();
 
     loop {
