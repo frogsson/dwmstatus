@@ -1,7 +1,9 @@
 extern crate chrono;
 
 #[derive(Debug)]
-pub struct Time { val: String }
+pub struct Time {
+    val: String,
+}
 
 impl Time {
     pub fn init() -> Time {

@@ -14,3 +14,9 @@ output_order = [
 # https://openweathermap.org/
 weather_apikey = ""
 weather_city = ""
+
+# network interface ($ ip addr show)
+net_interface = "eno1"
+
+# update interval in seconds
+update_interval = 1

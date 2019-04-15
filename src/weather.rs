@@ -1,5 +1,5 @@
-use std::time::{Duration, Instant};
 use std::string::String;
+use std::time::{Duration, Instant};
 
 // https://home.openweathermap.org
 // https://api.openweathermap.org/data/2.5/weather?q={CITY_ID}&appid={API_KEY}
@@ -15,7 +15,7 @@ pub struct Weather {
 impl Weather {
     pub fn init(url: String) -> Weather {
         Weather {
-            url: url.clone(),
+            url,
             val: String::new(),
             five_min: Duration::from_secs(300),
             last_update: None,
@@ -61,26 +61,29 @@ fn get_weather(url: &str) -> Option<String> {
         Ok(r) => r,
         Err(e) => {
             eprintln!("{}", e);
-            return None
-        },
+            return None;
+        }
     };
- 
+
     let json: serde_json::Value = match req.json() {
         Ok(j) => j,
         Err(e) => {
             eprintln!("{}", e);
-            return None
-        },
+            return None;
+        }
     };
 
-    let degrees_cel: Option<f64> = json.pointer("/main/temp")
+    let degrees_cel: Option<f64> = json
+        .pointer("/main/temp")
         .and_then(|n| n.as_f64().and_then(|f| Some(f.round())));
 
-    let weather: Option<String> = json.pointer("/weather/0/description")
-        .and_then(|s| s.as_str().and_then(|ss| {
+    let weather: Option<String> = json.pointer("/weather/0/description").and_then(|s| {
+        s.as_str().and_then(|ss| {
             let mut x = ss.trim_matches('"').chars();
-            x.next().and_then(|f| Some(f.to_uppercase().collect::<String>() + x.as_str()))
-        }));
+            x.next()
+                .and_then(|f| Some(f.to_uppercase().collect::<String>() + x.as_str()))
+        })
+    });
 
     let mut weather_str = String::new();
     if let (Some(x), Some(y)) = (weather, degrees_cel) {

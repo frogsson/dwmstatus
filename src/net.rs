@@ -30,14 +30,16 @@ impl Net {
 
             if let Some(x) = i.get(0) {
                 self.recv_stack.remove(0);
-                self.recv_stack.push((x - self.recv) / seconds_passed as f32);
+                self.recv_stack
+                    .push((x - self.recv) / seconds_passed as f32);
                 self.recv = *x;
             }
             let recv = transfer_speed_as_mb(&self.recv_stack);
 
             if let Some(y) = i.get(8) {
                 self.tran_stack.remove(0);
-                self.tran_stack.push((y - self.tran) / seconds_passed as f32);
+                self.tran_stack
+                    .push((y - self.tran) / seconds_passed as f32);
                 self.tran = *y;
             }
             let tran = transfer_speed_as_mb(&self.tran_stack);
@@ -59,11 +61,12 @@ pub fn read_net_proc(interface: &str) -> Option<Vec<f32>> {
         Ok(s) => s,
         Err(e) => {
             eprintln!("`/proc/net/dev` {}", e);
-            return None
+            return None;
         }
     };
 
-    let vals: Vec<_> = net_info.split('\n')
+    let vals: Vec<_> = net_info
+        .split('\n')
         .filter(|s| s.contains(interface))
         .collect::<String>()
         .trim()
@@ -71,7 +74,9 @@ pub fn read_net_proc(interface: &str) -> Option<Vec<f32>> {
         .filter_map(|s| s.parse::<f32>().ok())
         .collect();
 
-    if vals.is_empty() { return None }
+    if vals.is_empty() {
+        return None;
+    }
 
     Some(vals)
 }

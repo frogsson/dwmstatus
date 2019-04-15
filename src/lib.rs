@@ -1,13 +1,13 @@
 // extern crate serde;
+extern crate dirs;
+extern crate reqwest;
 extern crate serde_json;
 extern crate toml;
-extern crate reqwest;
-extern crate dirs;
 
-mod datetime;
-mod net;
 mod cpu;
+mod datetime;
 mod mem;
+mod net;
 mod weather;
 
 #[derive(Debug, PartialEq)]
@@ -31,21 +31,25 @@ pub struct Modules {
 impl Modules {
     pub fn init(cfg: toml::Value, order: &[ModuleName]) -> Modules {
         let url = if order.contains(&ModuleName::Weather) {
-            let apikey = match cfg["weather_apikey"].as_str() {
-                Some(s) => s,
-                None => {
-                    eprintln!("weather_apikey not found for weather module in output");
+            let apikey = cfg
+                .get("weather_apikey")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_else(|| {
+                    eprintln!(
+                        "Error: `weather` module requires `weather_api` to be set in config.toml"
+                    );
                     std::process::exit(0x0100);
-                }
-            };
+                });
 
-            let city = match cfg["weather_city"].as_str() {
-                Some(s) => s,
-                None => {
-                    eprintln!("weather_city not found for weather module in output");
+            let city = cfg
+                .get("weather_city")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_else(|| {
+                    eprintln!(
+                        "Error: `weather` module requires `weather_city` to be set in config.toml"
+                    );
                     std::process::exit(0x0100);
-                }
-            };
+                });
 
             format_url(city, apikey)
         } else {
@@ -53,13 +57,15 @@ impl Modules {
         };
 
         let net_interface = if order.contains(&ModuleName::Net) {
-            match cfg["net_interface"].as_str() {
-                Some(s) => s.to_string(),
-                None => {
-                    eprintln!("net_interface not found for net module in output");
+            cfg.get("net_interface")
+                .and_then(toml::Value::as_str)
+                .unwrap_or_else(|| {
+                    eprintln!(
+                        "Error: `net` module requires `net_interface` to be set in config.toml"
+                    );
                     std::process::exit(0x0100);
-                },
-            }
+                })
+                .to_string()
         } else {
             String::new()
         };
@@ -88,11 +94,11 @@ pub fn read_config() -> toml::Value {
         Some(mut path) => {
             path.push(".config/rustystatus/config.toml");
             path
-        },
+        }
         None => {
             eprintln!("Error: Missing home directory definition `$HOME`");
             std::process::exit(0x0100);
-        },
+        }
     };
 
     let config_str = match std::fs::read_to_string(&config_path) {
@@ -100,16 +106,25 @@ pub fn read_config() -> toml::Value {
         Err(e) => {
             eprintln!("Error: `{}` {}", config_path.to_str().unwrap_or("$HOME"), e);
             std::process::exit(0x0100);
-        },
+        }
     };
 
-    let config: toml::Value = toml::from_str(&config_str).expect("HELLO");
+    let config: toml::Value = match toml::from_str(&config_str) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error: hello {}", e);
+            std::process::exit(0x0100);
+        }
+    };
 
     config
 }
 
 fn format_url(city: &str, apikey: &str) -> String {
-    format!("https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}", city, apikey)
+    format!(
+        "https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}",
+        city, apikey
+    )
 }
 
 pub fn parse_output_order(m_order: Option<&Vec<toml::Value>>) -> Vec<ModuleName> {

@@ -49,11 +49,12 @@ fn read_cpu_proc() -> Option<Vec<i32>> {
         Ok(s) => s,
         Err(e) => {
             eprintln!("`/proc/stat` {}", e);
-            return None
+            return None;
         }
     };
 
-    let cpu = cpu_proc.split('\n')
+    let cpu = cpu_proc
+        .split('\n')
         .nth(0)
         .unwrap()
         .split_whitespace()
