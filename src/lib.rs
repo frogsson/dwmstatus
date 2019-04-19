@@ -11,7 +11,7 @@ mod net;
 mod weather;
 
 #[derive(Debug, PartialEq)]
-pub enum ModuleName {
+enum ModuleName {
     Time,
     Weather,
     Net,

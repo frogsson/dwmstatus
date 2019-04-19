@@ -1,6 +1,6 @@
 extern crate rustystatus;
 
-use rustystatus::{call, match_module, parse_output_order, read_config, ModuleName, Modules};
+use rustystatus::{call, match_module, parse_output_order, read_config, Modules};
 use std::thread::sleep;
 use std::time::Duration;
 
