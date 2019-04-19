@@ -14,7 +14,7 @@ impl Cpu {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> &mut Self {
         //      user    nice   system  idle      iowait irq   softirq  steal  guest  guest_nice
         // cpu  74608   2520   24433   1117073   6176   4054  0        0      0      0
 
@@ -37,6 +37,8 @@ impl Cpu {
         } else {
             self.val = "".to_string();
         }
+
+        self
     }
 
     pub fn output(&self) -> String {

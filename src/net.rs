@@ -24,7 +24,7 @@ impl Net {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> &mut Self {
         if let Some(i) = read_net_proc(&self.interface) {
             let seconds_passed = self.net_time.elapsed().as_secs() * 1_000_000;
 
@@ -49,6 +49,7 @@ impl Net {
         } else {
             self.val = "".to_string();
         }
+        self
     }
 
     pub fn output(&self) -> String {

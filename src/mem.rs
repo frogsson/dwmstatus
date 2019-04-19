@@ -8,7 +8,7 @@ impl Mem {
         Mem { val: String::new() }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> &mut Self {
         if let Some(s) = read_memory_proc() {
             let v: Vec<_> = s
                 .split('\n')
@@ -31,6 +31,8 @@ impl Mem {
         } else {
             self.val = "".to_string()
         }
+
+        self
     }
 
     pub fn output(&self) -> String {

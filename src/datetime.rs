@@ -10,10 +10,11 @@ impl Time {
         Time { val: String::new() }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> &mut Self {
         self.val = chrono::Local::now()
             .format("\u{e225}%A %b %Y-%m-%d %H:%M")
             .to_string();
+        self
     }
 
     pub fn output(&self) -> String {

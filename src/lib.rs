@@ -127,21 +127,33 @@ fn format_url(city: &str, apikey: &str) -> String {
     )
 }
 
-pub fn parse_output_order(m_order: Option<&Vec<toml::Value>>) -> Vec<ModuleName> {
-    let mut order = Vec::new();
-    if let Some(ord) = m_order {
-        for m in ord {
-            match m.as_str() {
-                Some("time") => order.push(ModuleName::Time),
-                Some("netspeed") => order.push(ModuleName::Net),
-                Some("cpu") => order.push(ModuleName::Cpu),
-                Some("memory") => order.push(ModuleName::Mem),
-                Some("weather") => order.push(ModuleName::Weather),
-                Some(e) => eprintln!("{} - Not a Module", e),
-                _ => (),
-            }
-        }
-    }
+pub fn parse_output_order(output_order: Option<&toml::Value>) -> Vec<ModuleName> {
+    output_order
+        .and_then(toml::value::Value::as_array)
+        .expect("Error: parsing `output_order` in config.toml")
+        .iter()
+        .filter_map(|module| match_order_input(module))
+        .collect()
+}
 
-    order
+fn match_order_input(m: &toml::Value) -> Option<ModuleName> {
+    match m.as_str() {
+        Some("time") => Some(ModuleName::Time),
+        Some("netspeed") => Some(ModuleName::Net),
+        Some("cpu") => Some(ModuleName::Cpu),
+        Some("memory") => Some(ModuleName::Mem),
+        Some("weather") => Some(ModuleName::Weather),
+        Some(e) => { eprintln!("{:?} - Not a valid Module", e); None },
+        _ => None,
+    }
+}
+
+pub fn match_module(m: &ModuleName, modules: &mut Modules) -> String {
+    match m {
+        ModuleName::Time => modules.time.update().output(),
+        ModuleName::Net => modules.net.update().output(),
+        ModuleName::Cpu => modules.cpu.update().output(),
+        ModuleName::Mem => modules.mem.update().output(),
+        ModuleName::Weather => modules.weather.update().output(),
+    }
 }

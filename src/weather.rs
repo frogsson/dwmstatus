@@ -22,7 +22,7 @@ impl Weather {
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> &mut Self {
         if let Some(lupdate) = self.last_update {
             if lupdate.elapsed() >= self.five_min {
                 self.val = get_weather(&self.url).unwrap_or_default();
@@ -32,6 +32,8 @@ impl Weather {
             self.val = get_weather(&self.url).unwrap_or_default();
             self.last_update = Some(Instant::now());
         }
+
+        self
     }
 
     pub fn output(&self) -> String {
