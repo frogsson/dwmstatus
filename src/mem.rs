@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Mem {
     val: String,
 }
@@ -8,7 +8,7 @@ impl Mem {
         Mem { val: String::new() }
     }
 
-    pub fn update(&mut self) -> &mut Self {
+    pub fn update(&mut self) {
         if let Some(s) = read_memory_proc() {
             let v: Vec<_> = s
                 .split('\n')
@@ -31,8 +31,6 @@ impl Mem {
         } else {
             self.val = "".to_string()
         }
-
-        self
     }
 
     pub fn output(&self) -> String {

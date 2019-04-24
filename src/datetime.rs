@@ -1,6 +1,6 @@
 extern crate chrono;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Time {
     val: String,
 }
@@ -10,11 +10,10 @@ impl Time {
         Time { val: String::new() }
     }
 
-    pub fn update(&mut self) -> &mut Self {
+    pub fn update(&mut self) {
         self.val = chrono::Local::now()
             .format("\u{e225}%A %b %Y-%m-%d %H:%M")
             .to_string();
-        self
     }
 
     pub fn output(&self) -> String {

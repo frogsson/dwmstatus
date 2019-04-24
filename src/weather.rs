@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 // https://home.openweathermap.org
 // https://api.openweathermap.org/data/2.5/weather?q={CITY_ID}&appid={API_KEY}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Weather {
     val: String,
     url: String,
@@ -22,7 +22,7 @@ impl Weather {
         }
     }
 
-    pub fn update(&mut self) -> &mut Self {
+    pub fn update(&mut self) {
         if let Some(lupdate) = self.last_update {
             if lupdate.elapsed() >= self.five_min {
                 self.val = get_weather(&self.url).unwrap_or_default();
@@ -32,8 +32,6 @@ impl Weather {
             self.val = get_weather(&self.url).unwrap_or_default();
             self.last_update = Some(Instant::now());
         }
-
-        self
     }
 
     pub fn output(&self) -> String {

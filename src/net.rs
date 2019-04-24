@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Net {
     val: String,
     recv: f32,
@@ -24,9 +24,11 @@ impl Net {
         }
     }
 
-    pub fn update(&mut self) -> &mut Self {
+    pub fn update(&mut self) {
         if let Some(i) = read_net_proc(&self.interface) {
             let seconds_passed = self.net_time.elapsed().as_secs() * 1_000_000;
+
+            println!("{:?}", self.recv_stack);
 
             if let Some(x) = i.get(0) {
                 self.recv_stack.remove(0);
@@ -49,7 +51,6 @@ impl Net {
         } else {
             self.val = "".to_string();
         }
-        self
     }
 
     pub fn output(&self) -> String {
