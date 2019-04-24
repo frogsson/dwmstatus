@@ -159,39 +159,38 @@ pub fn call(out: &str) {
         .expect("something happened");
 }
 
-// pub fn parse_output_order(output_order: Option<&toml::Value>) -> Vec<Module> {
-//     output_order
-//         .and_then(toml::value::Value::as_array)
-//         .expect("Error: parsing `output_order` in config.toml")
-//         .iter()
-//         .filter_map(|module| match_order_input(module))
-//         .collect()
-// }
-//
-// fn match_order_input(m: &toml::Value) -> Option<Module> {
-//     match m.as_str() {
-//         Some("time") => Some(Module::Time),
-//         Some("netspeed") => Some(Module::Net),
-//         Some("cpu") => Some(Module::Cpu),
-//         Some("memory") => Some(Module::Mem),
-//         Some("weather") => Some(Module::Weather),
-//         Some(e) => {
-//             eprintln!("{:?} - Not a valid Module", e);
-//             None
-//         }
-//         _ => None,
-//     }
-// }
-//
-// pub fn match_module(module: &mut Module) -> String {
-//     // let s: String;
-//     if let Module::Time(ref mut v) = module {
-//         *v.update();
-//     }
-//     "".to_string()
-//         // Module::Time => modules.time.update().output(),
-//         // Module::Net => modules.net.update().output(),
-//         // Module::Cpu => modules.cpu.update().output(),
-//         // Module::Mem => modules.mem.update().output(),
-//         // Module::Weather => modules.weather.update().output(),
-// }
+pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String {
+    let mut output: String;
+    match module {
+        Module::Time(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+        Module::Weather(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+        Module::Net(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+        Module::Cpu(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+        Module::Mem(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+    }
+
+    if !last_m {
+        output.push_str(sep);
+    }
+
+    output
+}
+
+pub fn last_item(num: usize, len: usize) -> bool {
+    num >= len
+}
