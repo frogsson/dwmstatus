@@ -1,39 +1,50 @@
 extern crate rustystatus;
 
-use rustystatus::{call, match_module, parse_output_order, read_config, Modules};
+use rustystatus::Unwrap;
+use rustystatus::{call, get_config_path};
+use rustystatus::{Config, Module};
+use std::error::Error;
 use std::thread::sleep;
-use std::time::Duration;
 
-fn main() {
-    let config = read_config();
+fn main() -> Result<(), Box<dyn Error>> {
+    let config = Config::from(get_config_path()?).unwrap_or_default();
 
-    let update_interval = Duration::from_millis(
-        config
-            .get("update_interval")
-            .and_then(|value| value.as_float().map(|f| f * 1000.0))
-            .unwrap_or(1000.0) as u64,
-    );
-
-    let order = parse_output_order(config.get("output_order"));
-    let separator = config["output_separator"]
-        .as_str()
-        .unwrap_or(" ")
-        .to_string();
-
-    let mut modules = Modules::init(config, &order);
-    let last_module = order.last().expect("no modules in output_order");
+    // let separator = config.separator();
+    let mut order = config.order()?;
+    // let last_module = order.last().expect("no modules in output_order");
 
     loop {
-        let output: String = order.iter()
-            .map(|m| {
-                let mut module_output = match_module(m, &mut modules);
-                if m != last_module {
-                    module_output.push_str(&separator);
-                }
-                module_output
-            }).collect();
+        let mut output = String::new();
+
+        for module in order.iter_mut() {
+            match module.clone() {
+                Module::Time(ref mut m) => {
+                    m.update();
+                    output.push_str(&m.output());
+                },
+                Module::Weather(ref mut m) => {
+                    m.update();
+                    output.push_str(&m.output());
+                },
+                Module::Net(ref mut m) => {
+                    m.update();
+                    output.push_str(&m.output());
+                },
+                Module::Cpu(ref mut m) => {
+                    m.update();
+                    output.push_str(&m.output());
+                },
+                Module::Mem(ref mut m) => {
+                    m.update();
+                    output.push_str(&m.output());
+                },
+            }
+            output.push_str(&config.separator());
+        }
+
+        println!("{:?}", order);
 
         call(&output);
-        sleep(update_interval);
+        sleep(config.update_interval());
     }
 }

@@ -1,4 +1,9 @@
-// extern crate serde;
+use std::error::Error;
+use std::path::PathBuf;
+use std::time::Duration;
+
+#[macro_use]
+extern crate serde_derive;
 extern crate dirs;
 extern crate reqwest;
 extern crate serde_json;
@@ -10,72 +15,137 @@ mod mem;
 mod net;
 mod weather;
 
-#[derive(Debug, PartialEq)]
-pub enum ModuleName {
-    Time,
-    Weather,
-    Net,
-    Cpu,
-    Mem,
+#[derive(Debug, PartialEq, Clone)]
+pub enum Module {
+    Time(datetime::Time),
+    Weather(weather::Weather),
+    Net(net::Net),
+    Cpu(cpu::Cpu),
+    Mem(mem::Mem),
 }
 
-#[derive(Debug)]
-pub struct Modules {
-    pub time: datetime::Time,
-    pub net: net::Net,
-    pub cpu: cpu::Cpu,
-    pub mem: mem::Mem,
-    pub weather: weather::Weather,
+#[derive(Deserialize, Debug)]
+pub struct Config {
+    output_separator: Option<String>,
+    output_order: Option<Vec<String>>,
+    weather_apikey: Option<String>,
+    weather_city: Option<String>,
+    net_interface: Option<String>,
+    update_interval: Option<f32>,
 }
 
-impl Modules {
-    pub fn init(cfg: toml::Value, order: &[ModuleName]) -> Modules {
-        let url = if order.contains(&ModuleName::Weather) {
-            let apikey = cfg
-                .get("weather_apikey")
-                .and_then(toml::Value::as_str)
-                .unwrap_or_else(|| {
-                    eprintln!(
-                        "Error: `weather` module requires `weather_api` to be set in config.toml"
-                    );
-                    std::process::exit(0x0100);
-                });
+impl Config {
+    pub fn from(path: PathBuf) -> Result<Config, Box<dyn Error>> {
+        let config = std::fs::read_to_string(path)?;
+        let config = toml::from_str(config.as_str())?;
+        Ok(config)
+    }
 
-            let city = cfg
-                .get("weather_city")
-                .and_then(toml::Value::as_str)
-                .unwrap_or_else(|| {
-                    eprintln!(
-                        "Error: `weather` module requires `weather_city` to be set in config.toml"
-                    );
-                    std::process::exit(0x0100);
-                });
+    fn default() -> Config {
+        Config {
+            output_separator: Some(" ".to_string()),
+            output_order: Some(vec!["time".to_string()]),
+            weather_apikey: None,
+            weather_city: None,
+            net_interface: None,
+            update_interval: None,
+        }
+    }
 
-            format_url(city, apikey)
-        } else {
-            String::new()
+    pub fn update_interval(&self) -> Duration {
+        Duration::from_millis((self.update_interval.unwrap_or(1.0) * 1000.0) as u64)
+    }
+
+    pub fn separator(&self) -> &str {
+        match &self.output_separator {
+            Some(e) => e,
+            None => " ",
+        }
+    }
+
+    pub fn order(&self) -> Result<Vec<Module>, Box<dyn Error>> {
+        let v = match &self.output_order {
+            Some(e) => e,
+            None => {
+                eprintln!("Could not parse output_order");
+                return Ok(vec![Module::Time(datetime::Time::init())]);
+            }
         };
 
-        let net_interface = if order.contains(&ModuleName::Net) {
-            cfg.get("net_interface")
-                .and_then(toml::Value::as_str)
-                .unwrap_or_else(|| {
-                    eprintln!(
-                        "Error: `net` module requires `net_interface` to be set in config.toml"
-                    );
-                    std::process::exit(0x0100);
-                })
-                .to_string()
-        } else {
-            String::new()
+        let mut vm = Vec::new();
+        for module in v.iter() {
+            match module.as_str() {
+                "time" => vm.push(Module::Time(datetime::Time::init())),
+                "netspeed" => vm.push(Module::Net(net::Net::init(Config::get_net_interface(
+                    &self.net_interface,
+                )?))),
+                "cpu" => vm.push(Module::Cpu(cpu::Cpu::init())),
+                "memory" => vm.push(Module::Mem(mem::Mem::init())),
+                "weather" => vm.push(Module::Weather(weather::Weather::init(Config::format_url(
+                    &self.weather_apikey,
+                    &self.weather_city,
+                )?))),
+                invalid_module => {
+                    eprintln!("{:?} - Not a valid Module", invalid_module);
+                }
+            }
+        }
+
+        Ok(vm)
+    }
+
+    fn format_url(apikey: &Option<String>, city: &Option<String>) -> Result<String, &'static str> {
+        let apikey = match apikey {
+            Some(s) => s,
+            None => {
+                return Err(
+                    "Error: `weather` module requires `weather_api` to be set in config.toml",
+                )
+            }
         };
 
-        Modules {
-            time: datetime::Time::init(),
-            net: net::Net::init(net_interface),
-            cpu: cpu::Cpu::init(),
-            mem: mem::Mem::init(),
-            weather: weather::Weather::init(url),
+        let city = match city {
+            Some(s) => s,
+            None => {
+                return Err(
+                    "Error: `weather` module requires `weather_city` to be set in config.toml",
+                )
+            }
+        };
+
+        Ok(format!(
+            "https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}",
+            city, apikey
+        ))
+    }
+
+    fn get_net_interface(interface: &Option<String>) -> Result<String, &'static str> {
+        match interface {
+            Some(e) => Ok(e.to_string()),
+            None => Err("Error: `net` module requires `net_interface` to be set in config.toml"),
+        }
+    }
+}
+
+pub fn get_config_path() -> Result<PathBuf, &'static str> {
+    match dirs::home_dir() {
+        Some(mut path) => {
+            path.push(".config/rustystatus/config.toml");
+            Ok(path)
+        }
+        None => Err("Error: Missing home directory definition `$HOME`"),
+    }
+}
+
+pub trait Unwrap {
+    fn unwrap_or_default(self) -> Config;
+}
+
+impl Unwrap for Result<Config, Box<dyn Error>> {
+    fn unwrap_or_default(self) -> Config {
+        match self {
+            Ok(c) => c,
+            Err(_) => Config::default(),
         }
     }
 }
@@ -89,71 +159,39 @@ pub fn call(out: &str) {
         .expect("something happened");
 }
 
-pub fn read_config() -> toml::Value {
-    let config_path = match dirs::home_dir() {
-        Some(mut path) => {
-            path.push(".config/rustystatus/config.toml");
-            path
-        }
-        None => {
-            eprintln!("Error: Missing home directory definition `$HOME`");
-            std::process::exit(0x0100);
-        }
-    };
-
-    let config_str = match std::fs::read_to_string(&config_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error: `{}` {}", config_path.to_str().unwrap_or("$HOME"), e);
-            std::process::exit(0x0100);
-        }
-    };
-
-    let config: toml::Value = match toml::from_str(&config_str) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("Error: hello {}", e);
-            std::process::exit(0x0100);
-        }
-    };
-
-    config
-}
-
-fn format_url(city: &str, apikey: &str) -> String {
-    format!(
-        "https://api.openweathermap.org/data/2.5/weather?id={}&units=metric&appid={}",
-        city, apikey
-    )
-}
-
-pub fn parse_output_order(output_order: Option<&toml::Value>) -> Vec<ModuleName> {
-    output_order
-        .and_then(toml::value::Value::as_array)
-        .expect("Error: parsing `output_order` in config.toml")
-        .iter()
-        .filter_map(|module| match_order_input(module))
-        .collect()
-}
-
-fn match_order_input(m: &toml::Value) -> Option<ModuleName> {
-    match m.as_str() {
-        Some("time") => Some(ModuleName::Time),
-        Some("netspeed") => Some(ModuleName::Net),
-        Some("cpu") => Some(ModuleName::Cpu),
-        Some("memory") => Some(ModuleName::Mem),
-        Some("weather") => Some(ModuleName::Weather),
-        Some(e) => { eprintln!("{:?} - Not a valid Module", e); None },
-        _ => None,
-    }
-}
-
-pub fn match_module(m: &ModuleName, modules: &mut Modules) -> String {
-    match m {
-        ModuleName::Time => modules.time.update().output(),
-        ModuleName::Net => modules.net.update().output(),
-        ModuleName::Cpu => modules.cpu.update().output(),
-        ModuleName::Mem => modules.mem.update().output(),
-        ModuleName::Weather => modules.weather.update().output(),
-    }
-}
+// pub fn parse_output_order(output_order: Option<&toml::Value>) -> Vec<Module> {
+//     output_order
+//         .and_then(toml::value::Value::as_array)
+//         .expect("Error: parsing `output_order` in config.toml")
+//         .iter()
+//         .filter_map(|module| match_order_input(module))
+//         .collect()
+// }
+//
+// fn match_order_input(m: &toml::Value) -> Option<Module> {
+//     match m.as_str() {
+//         Some("time") => Some(Module::Time),
+//         Some("netspeed") => Some(Module::Net),
+//         Some("cpu") => Some(Module::Cpu),
+//         Some("memory") => Some(Module::Mem),
+//         Some("weather") => Some(Module::Weather),
+//         Some(e) => {
+//             eprintln!("{:?} - Not a valid Module", e);
+//             None
+//         }
+//         _ => None,
+//     }
+// }
+//
+// pub fn match_module(module: &mut Module) -> String {
+//     // let s: String;
+//     if let Module::Time(ref mut v) = module {
+//         *v.update();
+//     }
+//     "".to_string()
+//         // Module::Time => modules.time.update().output(),
+//         // Module::Net => modules.net.update().output(),
+//         // Module::Cpu => modules.cpu.update().output(),
+//         // Module::Mem => modules.mem.update().output(),
+//         // Module::Weather => modules.weather.update().output(),
+// }
