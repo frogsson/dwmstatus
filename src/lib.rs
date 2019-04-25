@@ -56,14 +56,14 @@ impl Config {
         Duration::from_millis((self.update_interval.unwrap_or(1.0) * 1000.0) as u64)
     }
 
-    pub fn separator(&self) -> &str {
+    pub fn separator(&self) -> String {
         match &self.output_separator {
-            Some(e) => e,
-            None => " ",
+            Some(e) => e.to_string(),
+            None => " ".to_string(),
         }
     }
 
-    pub fn order(&self) -> Result<Vec<Module>, Box<dyn Error>> {
+    pub fn modules(&self) -> Result<Vec<Module>, Box<dyn Error>> {
         let v = match &self.output_order {
             Some(e) => e,
             None => {
