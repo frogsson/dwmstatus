@@ -1,6 +1,7 @@
 use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
+use std::thread::sleep;
 
 #[macro_use]
 extern crate serde_derive;
@@ -35,13 +36,14 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from(path: PathBuf) -> Result<Config, Box<dyn Error>> {
+    pub fn new() -> Result<Config, Box<dyn Error>> {
+        let path = get_config_path()?;
         let config = std::fs::read_to_string(path)?;
         let config = toml::from_str(config.as_str())?;
         Ok(config)
     }
 
-    fn default() -> Config {
+    pub fn default() -> Config {
         Config {
             output_separator: Some(" ".to_string()),
             output_order: Some(vec!["time".to_string()]),
@@ -75,16 +77,28 @@ impl Config {
         let mut vm = Vec::new();
         for module in v.iter() {
             match module.as_str() {
-                "time" => vm.push(Module::Time(datetime::Time::init())),
-                "netspeed" => vm.push(Module::Net(net::Net::init(Config::get_net_interface(
-                    &self.net_interface,
-                )?))),
-                "cpu" => vm.push(Module::Cpu(cpu::Cpu::init())),
-                "memory" => vm.push(Module::Mem(mem::Mem::init())),
-                "weather" => vm.push(Module::Weather(weather::Weather::init(Config::format_url(
-                    &self.weather_apikey,
-                    &self.weather_city,
-                )?))),
+                "time" => {
+                    let time = datetime::Time::init();
+                    vm.push(Module::Time(time));
+                },
+                "netspeed" => {
+                    let interface = self.get_net_interface()?;
+                    let net = net::Net::init(interface);
+                    vm.push(Module::Net(net));
+                },
+                "cpu" => {
+                    let cpu = cpu::Cpu::init();
+                    vm.push(Module::Cpu(cpu));
+                },
+                "memory" => {
+                    let mem = mem::Mem::init();
+                    vm.push(Module::Mem(mem));
+                },
+                "weather" => {
+                    let url = self.format_url()?;
+                    let weather = weather::Weather::init(url);
+                    vm.push(Module::Weather(weather));
+                },
                 invalid_module => {
                     eprintln!("{:?} - Not a valid Module", invalid_module);
                 }
@@ -94,21 +108,21 @@ impl Config {
         Ok(vm)
     }
 
-    fn format_url(apikey: &Option<String>, city: &Option<String>) -> Result<String, &'static str> {
-        let apikey = match apikey {
+    fn format_url(&self) -> Result<String, &'static str> {
+        let apikey = match &self.weather_apikey {
             Some(s) => s,
             None => {
                 return Err(
-                    "Error: `weather` module requires `weather_api` to be set in config.toml",
+                    "`weather` module requires `weather_api` to be set in config.toml",
                 )
             }
         };
 
-        let city = match city {
+        let city = match &self.weather_city {
             Some(s) => s,
             None => {
                 return Err(
-                    "Error: `weather` module requires `weather_city` to be set in config.toml",
+                    "`weather` module requires `weather_city` to be set in config.toml",
                 )
             }
         };
@@ -119,11 +133,30 @@ impl Config {
         ))
     }
 
-    fn get_net_interface(interface: &Option<String>) -> Result<String, &'static str> {
-        match interface {
+    fn get_net_interface(&self) -> Result<String, &'static str> {
+        match &self.net_interface {
             Some(e) => Ok(e.to_string()),
-            None => Err("Error: `net` module requires `net_interface` to be set in config.toml"),
+            None => Err("`net` module requires `net_interface` to be set in config.toml"),
         }
+    }
+}
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let mut modules = config.modules()?;
+    let update_interval = config.update_interval();
+    let separator = config.separator();
+    let len = modules.len() - 1;
+    std::mem::drop(config);
+
+    loop {
+        let output: String = modules
+            .iter_mut()
+            .enumerate()
+            .map(|module| update_and_output(module.1, &separator, last_item(module.0, len)))
+            .collect();
+
+        call(&output);
+        sleep(update_interval);
     }
 }
 
@@ -133,20 +166,7 @@ pub fn get_config_path() -> Result<PathBuf, &'static str> {
             path.push(".config/rustystatus/config.toml");
             Ok(path)
         }
-        None => Err("Error: Missing home directory definition `$HOME`"),
-    }
-}
-
-pub trait Unwrap {
-    fn unwrap_or_default(self) -> Config;
-}
-
-impl Unwrap for Result<Config, Box<dyn Error>> {
-    fn unwrap_or_default(self) -> Config {
-        match self {
-            Ok(c) => c,
-            Err(_) => Config::default(),
-        }
+        None => Err("missing home directory definition `$HOME`"),
     }
 }
 
