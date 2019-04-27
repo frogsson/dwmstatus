@@ -1,11 +1,12 @@
 output_separator = " "
 
 # available modules
-# "netspeed", "memory", "cpu", "weather", "time"
+# "netspeed", "memory", "cpu", "weather", "time", "battery"
 output_order = [
 	"netspeed",
 	"memory",
 	"cpu",
+	"battery",
 	"weather",
 	"time",
 ]

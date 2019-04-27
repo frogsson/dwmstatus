@@ -15,6 +15,7 @@ mod datetime;
 mod mem;
 mod net;
 mod weather;
+mod bat;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Module {
@@ -23,6 +24,7 @@ pub enum Module {
     Net(net::Net),
     Cpu(cpu::Cpu),
     Mem(mem::Mem),
+    Bat(bat::Battery),
 }
 
 #[derive(Deserialize, Debug)]
@@ -98,6 +100,10 @@ impl Config {
                     let url = self.format_url()?;
                     let weather = weather::Weather::init(url);
                     vm.push(Module::Weather(weather));
+                },
+                "battery" => {
+                    let bat = bat::Battery::init();
+                    vm.push(Module::Bat(bat));
                 },
                 invalid_module => {
                     eprintln!("{:?} - Not a valid Module", invalid_module);
@@ -199,6 +205,10 @@ pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String
             output = m.output();
         }
         Module::Mem(ref mut m) => {
+            m.update();
+            output = m.output();
+        }
+        Module::Bat(ref mut m) => {
             m.update();
             output = m.output();
         }
