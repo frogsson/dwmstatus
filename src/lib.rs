@@ -16,6 +16,7 @@ mod mem;
 mod net;
 mod weather;
 mod bat;
+mod error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Module {
@@ -185,6 +186,18 @@ pub fn call(out: &str) {
         .expect("something happened");
 }
 
+// fn output_push<T>(module: T, last_m: bool) -> String
+// {
+//     let mut s = String::new();
+//     if let Some(e) = module.output() {
+//         e.push_str(e);
+//     }
+//     if !last_m {
+//         s.push_str(" ");
+//     }
+//     s
+// }
+
 pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String {
     let mut output: String;
     match module {
@@ -202,7 +215,8 @@ pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String
         }
         Module::Cpu(ref mut m) => {
             m.update();
-            output = m.output();
+            output = m.output().unwrap();
+            // output = output_push(m, last_m);
         }
         Module::Mem(ref mut m) => {
             m.update();
