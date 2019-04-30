@@ -3,7 +3,8 @@ use neterror::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Net {
-    val: String,
+    avg_recv: f32,
+    avg_tran: f32,
     recv: f32,
     tran: f32,
     recv_stack: Vec<f32>,
@@ -15,7 +16,8 @@ pub struct Net {
 impl Net {
     pub fn init(i: String) -> Net {
         Net {
-            val: String::new(),
+            avg_recv: 0.0,
+            avg_tran: 0.0,
             recv: 0.0,
             tran: 0.0,
             recv_stack: vec![0.0, 0.0, 0.0],
@@ -36,7 +38,7 @@ impl Net {
                         .push((x - self.recv) / seconds_passed as f32);
                     self.recv = *x;
                 }
-                let recv = transfer_speed_as_mb(&self.recv_stack);
+                self.avg_recv = transfer_speed_as_mb(&self.recv_stack);
 
                 if let Some(y) = i.get(8) {
                     self.tran_stack.remove(0);
@@ -44,20 +46,18 @@ impl Net {
                         .push((y - self.tran) / seconds_passed as f32);
                     self.tran = *y;
                 }
-                let tran = transfer_speed_as_mb(&self.tran_stack);
+                self.avg_tran = transfer_speed_as_mb(&self.tran_stack);
 
-                self.val = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
                 self.net_time = Instant::now();
             },
             Err(e) => {
                 eprintln!("Error: {}", e);
-                self.val = "".to_string();
             },
         }
     }
 
     pub fn output(&self) -> String {
-        self.val.to_string()
+        format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", self.avg_recv, self.avg_tran)
     }
 }
 
