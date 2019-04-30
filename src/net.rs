@@ -1,4 +1,5 @@
 use std::time::Instant;
+use neterror::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Net {
@@ -25,31 +26,33 @@ impl Net {
     }
 
     pub fn update(&mut self) {
-        if let Some(i) = read_net_proc(&self.interface) {
-            let seconds_passed = self.net_time.elapsed().as_secs() * 1_000_000;
+        match read_net_proc(&self.interface) {
+            Ok(i) => {
+                let seconds_passed = self.net_time.elapsed().as_secs() * 1_000_000;
 
-            println!("{:?}", self.recv_stack);
+                if let Some(x) = i.get(0) {
+                    self.recv_stack.remove(0);
+                    self.recv_stack
+                        .push((x - self.recv) / seconds_passed as f32);
+                    self.recv = *x;
+                }
+                let recv = transfer_speed_as_mb(&self.recv_stack);
 
-            if let Some(x) = i.get(0) {
-                self.recv_stack.remove(0);
-                self.recv_stack
-                    .push((x - self.recv) / seconds_passed as f32);
-                self.recv = *x;
-            }
-            let recv = transfer_speed_as_mb(&self.recv_stack);
+                if let Some(y) = i.get(8) {
+                    self.tran_stack.remove(0);
+                    self.tran_stack
+                        .push((y - self.tran) / seconds_passed as f32);
+                    self.tran = *y;
+                }
+                let tran = transfer_speed_as_mb(&self.tran_stack);
 
-            if let Some(y) = i.get(8) {
-                self.tran_stack.remove(0);
-                self.tran_stack
-                    .push((y - self.tran) / seconds_passed as f32);
-                self.tran = *y;
-            }
-            let tran = transfer_speed_as_mb(&self.tran_stack);
-
-            self.val = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
-            self.net_time = Instant::now();
-        } else {
-            self.val = "".to_string();
+                self.val = format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran);
+                self.net_time = Instant::now();
+            },
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                self.val = "".to_string();
+            },
         }
     }
 
@@ -58,14 +61,8 @@ impl Net {
     }
 }
 
-pub fn read_net_proc(interface: &str) -> Option<Vec<f32>> {
-    let net_info = match std::fs::read_to_string("/proc/net/dev") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("`/proc/net/dev` {}", e);
-            return None;
-        }
-    };
+pub fn read_net_proc(interface: &str) -> Result<Vec<f32>, Box<dyn std::error::Error>> {
+    let net_info = std::fs::read_to_string("/proc/net/dev")?;
 
     let vals: Vec<_> = net_info
         .split('\n')
@@ -77,14 +74,39 @@ pub fn read_net_proc(interface: &str) -> Option<Vec<f32>> {
         .collect();
 
     if vals.is_empty() {
-        return None;
+        Err(NetError::EmptyVec.into())
+    } else {
+        Ok(vals)
     }
-
-    Some(vals)
 }
 
 fn transfer_speed_as_mb(v: &[f32]) -> f32 {
     let sum: f32 = v.iter().sum();
     let len: f32 = v.len() as f32;
     sum / len
+}
+
+mod neterror {
+    use std::fmt;
+
+    #[derive(Debug)]
+    pub enum NetError {
+        EmptyVec,
+    }
+
+    impl std::error::Error for NetError {
+        fn description(&self) -> &str {
+            match *self {
+                NetError::EmptyVec => "vector is empty",
+            }
+        }
+    }
+
+    impl fmt::Display for NetError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match *self {
+                NetError::EmptyVec => f.write_str("vec is empty"),
+            }
+        }
+    }
 }
