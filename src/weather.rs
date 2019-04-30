@@ -1,12 +1,15 @@
 use std::string::String;
 use std::time::{Duration, Instant};
+use std::error::Error;
+use weathererror::*;
 
 // https://home.openweathermap.org
 // https://api.openweathermap.org/data/2.5/weather?q={CITY_ID}&appid={API_KEY}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Weather {
-    val: String,
+    description: String,
+    degrees: i8,
     url: String,
     five_min: Duration,
     last_update: Option<Instant>,
@@ -16,30 +19,40 @@ impl Weather {
     pub fn init(url: String) -> Weather {
         Weather {
             url,
-            val: String::new(),
+            description: String::new(),
+            degrees: 0,
             five_min: Duration::from_secs(300),
             last_update: None,
         }
     }
 
     pub fn update(&mut self) {
-        if let Some(lupdate) = self.last_update {
-            if lupdate.elapsed() >= self.five_min {
-                self.val = get_weather(&self.url).unwrap_or_default();
-                self.last_update = Some(Instant::now());
+        if let Some(t) = self.last_update {
+            if t.elapsed() >= self.five_min {
+                Weather::update_vals(self);
             }
         } else {
-            self.val = get_weather(&self.url).unwrap_or_default();
-            self.last_update = Some(Instant::now());
+            Weather::update_vals(self);
         }
     }
 
+    fn update_vals(&mut self) {
+        match get_weather(&self.url) {
+            Ok(t) => {
+                self.description = t.0;
+                self.degrees = t.1;
+            },
+            Err(e) => eprintln!("Error: {}", e),
+        }
+        self.last_update = Some(Instant::now());
+    }
+
     pub fn output(&self) -> String {
-        self.val.to_string()
+        format!("\u{e01d}{} {}°C", self.description, self.degrees)
     }
 }
 
-fn get_weather(url: &str) -> Option<String> {
+fn get_weather(url: &str) -> Result<(String, i8), Box<dyn Error>> {
     /* JSON FORMAT
     {
         "base":"stations",
@@ -57,38 +70,80 @@ fn get_weather(url: &str) -> Option<String> {
     }
     */
 
-    let mut req = match reqwest::get(url) {
-        Ok(r) => r,
-        Err(e) => {
-            eprintln!("{}", e);
-            return None;
-        }
-    };
+    let json: serde_json::Value = reqwest::get(url)?.json()?;
 
-    let json: serde_json::Value = match req.json() {
-        Ok(j) => j,
-        Err(e) => {
-            eprintln!("{}", e);
-            return None;
-        }
-    };
-
-    let degrees_cel: Option<f64> = json
+    let degrees_cel = json
         .pointer("/main/temp")
-        .and_then(|n| n.as_f64().and_then(|f| Some(f.round())));
+        .ok_or_else(|| WeatherError::NoTempVal)?
+        .as_f64()
+        .ok_or_else(|| WeatherError::F64Error)?
+        .round() as i8;
 
-    let weather: Option<String> = json.pointer("/weather/0/description").and_then(|s| {
-        s.as_str().and_then(|ss| {
-            let mut x = ss.trim_matches('"').chars();
-            x.next()
-                .and_then(|f| Some(f.to_uppercase().collect::<String>() + x.as_str()))
-        })
-    });
+    let description = json.pointer("/weather/0/description")
+        .ok_or_else(|| WeatherError::NoDescriptionVal)?
+        .as_str()
+        .ok_or_else(|| WeatherError::StrError)?
+        .trim_matches('"')
+        .capitalize_words();
 
-    let mut weather_str = String::new();
-    if let (Some(x), Some(y)) = (weather, degrees_cel) {
-        weather_str.push_str(&format!("\u{e01d}{} {}°C", x, y));
+    Ok((description, degrees_cel))
+}
+
+trait Capitalize {
+    fn capitalize_words(&self) -> String;
+}
+
+impl Capitalize for str {
+    fn capitalize_words(&self) -> String {
+        let mut new = String::new();
+        let words: Vec<_> = self.split_whitespace().collect();
+        let len = words.len() - 1;
+
+        for (num, word) in words.iter().enumerate() {
+            let mut chars = word.chars();
+            if let Some(c) = chars.next() {
+                new.push_str(&(c.to_uppercase().collect::<String>() + chars.as_str()));
+                if num != len {
+                    new.push_str(" ");
+                }
+            }
+        }
+        new
+    }
+}
+
+mod weathererror {
+    use std::fmt;
+
+    #[derive(Debug, PartialEq, Clone)]
+    pub enum WeatherError {
+        NoTempVal,
+        F64Error,
+        NoDescriptionVal,
+        StrError,
     }
 
-    Some(weather_str)
+    impl std::error::Error for WeatherError {
+        fn description(&self) -> &str {
+            match *self {
+                WeatherError::NoTempVal => "could not find `/main/temp` in json",
+                WeatherError::F64Error => "could not cast `/main/temp` value into f64",
+                WeatherError::NoDescriptionVal => "could not find /weather/0/description in json",
+                WeatherError::StrError => "could not cast /weather/0/description value into str",
+            }
+        }
+    }
+
+    impl fmt::Display for WeatherError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match *self {
+                WeatherError::NoTempVal => f.write_str("could not find `/main/temp` in json"),
+                WeatherError::F64Error => f.write_str("could not cast `/main/temp` value into f64"),
+                WeatherError::NoDescriptionVal => f.write_str("could not find /weather/0/description in json"),
+                WeatherError::StrError => f.write_str("could not cast /weather/0/description value into str"),
+            }
+        }
+    }
+
+
 }
