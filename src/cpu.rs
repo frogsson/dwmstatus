@@ -1,6 +1,9 @@
+use cpuerror::*;
+use std::error::Error;
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Cpu {
-    val: String,
+    val: std::result::Result<i32, CpuError>,
     system: i32,
     last_sum: i32,
 }
@@ -8,7 +11,7 @@ pub struct Cpu {
 impl Cpu {
     pub fn init() -> Cpu {
         Cpu {
-            val: String::new(),
+            val: Ok(0),
             system: 0,
             last_sum: 0,
         }
@@ -20,46 +23,75 @@ impl Cpu {
 
         // explanation for this shit
         // https://www.idnt.net/en-GB/kb/941772
-        if let Some(cpu) = read_cpu_proc() {
-            let cpu_sum: i32 = cpu.iter().sum();
+        match read_cpu_proc() {
+            Ok(cpu) =>  {
+                let cpu_sum: i32 = cpu.iter().sum();
 
-            let s = cpu[3];
+                if let Some(s) = cpu.get(3) {
+                    let cpu_delta = cpu_sum - self.last_sum;
+                    let cpu_idle = s - self.system;
+                    let cpu_used = cpu_delta - cpu_idle;
+                    let cpu_usage = 100 * cpu_used / cpu_delta;
 
-            let cpu_delta = cpu_sum - self.last_sum;
-            let cpu_idle = s - self.system;
-            let cpu_used = cpu_delta - cpu_idle;
-            let cpu_usage = 100 * cpu_used / cpu_delta;
+                    self.system = *s;
+                    self.last_sum = cpu_sum;
 
-            self.system = s;
-            self.last_sum = cpu_sum;
-
-            self.val = format!("\u{e223}{:02}%", cpu_usage);
-        } else {
-            self.val = "".to_string();
+                    self.val = Ok(cpu_usage);
+                } else {
+                    eprintln!("Error: could get value from `/proc/stat`");
+                }
+            },
+            Err(e) => {
+                eprintln!("Error: `/proc/stat` {}", e);
+                self.val = Err(CpuError::Generic);
+            }
         }
     }
 
-    pub fn output(&self) -> String {
-        self.val.to_string()
+    pub fn output(&self) -> Option<String> {
+        match self.val {
+            Ok(i) => Some(format!("\u{e223}{:02}%", i)),
+            Err(_) => None,
+        }
     }
 }
 
-fn read_cpu_proc() -> Option<Vec<i32>> {
-    let cpu_proc = match std::fs::read_to_string("/proc/stat") {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!("`/proc/stat` {}", e);
-            return None;
-        }
-    };
-
-    let cpu = cpu_proc
+fn read_cpu_proc() -> Result<Vec<i32>, Box<dyn Error>> {
+    let cpu = std::fs::read_to_string("/proc/stat")?
         .split('\n')
         .nth(0)
-        .unwrap()
+        .ok_or_else(|| CpuError::ReadProc)?
         .split_whitespace()
         .filter_map(|s| s.parse::<i32>().ok())
         .collect::<Vec<i32>>();
 
-    Some(cpu)
+    Ok(cpu)
+}
+
+mod cpuerror {
+    use std::fmt;
+
+    #[derive(Debug, PartialEq, Clone)]
+    pub enum CpuError {
+        ReadProc,
+        Generic,
+    }
+
+    impl std::error::Error for CpuError {
+        fn description(&self) -> &str {
+            match *self {
+                CpuError::ReadProc => "failed parsing `/proc/stat`",
+                CpuError::Generic => "generic error",
+            }
+        }
+    }
+
+    impl fmt::Display for CpuError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match *self {
+                CpuError::ReadProc => f.write_str("failed parsing `/proc/stat`"),
+                CpuError::Generic => f.write_str("generic error"),
+            }
+        }
+    }
 }
