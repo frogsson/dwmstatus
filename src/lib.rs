@@ -16,7 +16,6 @@ mod mem;
 mod net;
 mod weather;
 mod bat;
-mod error;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Module {
