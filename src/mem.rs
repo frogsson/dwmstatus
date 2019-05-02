@@ -1,11 +1,11 @@
 #[derive(Debug, PartialEq, Clone)]
 pub struct Mem {
-    used_mem: f32,
+    used_mem: Option<f32>,
 }
 
 impl Mem {
     pub fn init() -> Mem {
-        Mem { used_mem: 0.0 }
+        Mem { used_mem: None }
     }
 
     pub fn update(&mut self) {
@@ -25,13 +25,16 @@ impl Mem {
 
                 // memory total = v[0]
                 // memory available = v[1]
-                self.used_mem = 100.0 - ((v[1] / v[0]) * 100.0);
+                self.used_mem = Some(100.0 - ((v[1] / v[0]) * 100.0));
             }
             Err(e) => eprintln!("Error: {}", e),
         }
     }
 
-    pub fn output(&self) -> String {
-        format!("\u{e021}{:02}%", self.used_mem.round())
+    pub fn output(&self) -> Option<String> {
+        match &self.used_mem {
+            Some(used_mem) => Some(format!("\u{e021}{:02}%", used_mem.round())),
+            _ => None,
+        }
     }
 }

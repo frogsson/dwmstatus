@@ -8,8 +8,8 @@ use weathererror::*;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Weather {
-    description: String,
-    degrees: i8,
+    description: Option<String>,
+    degrees: Option<i8>,
     url: String,
     five_min: Duration,
     last_update: Option<Instant>,
@@ -18,9 +18,9 @@ pub struct Weather {
 impl Weather {
     pub fn init(url: String) -> Weather {
         Weather {
+            description: None,
+            degrees: None,
             url,
-            description: String::new(),
-            degrees: 0,
             five_min: Duration::from_secs(300),
             last_update: None,
         }
@@ -39,16 +39,23 @@ impl Weather {
     fn update_vals(&mut self) {
         match get_weather(&self.url) {
             Ok(t) => {
-                self.description = t.0;
-                self.degrees = t.1;
+                self.description = Some(t.0);
+                self.degrees = Some(t.1);
             },
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => {
+                self.description = None;
+                self.degrees = None;
+                eprintln!("Error: {}", e)
+            },
         }
         self.last_update = Some(Instant::now());
     }
 
-    pub fn output(&self) -> String {
-        format!("\u{e01d}{} {}°C", self.description, self.degrees)
+    pub fn output(&self) -> Option<String> {
+        match (&self.description, &self.degrees) {
+            (Some(descript), Some(degree)) => Some(format!("\u{e01d}{} {}°C", descript, degree)),
+            _ => None,
+        }
     }
 }
 

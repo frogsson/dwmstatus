@@ -158,10 +158,10 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         let output: String = modules
             .iter_mut()
             .enumerate()
-            .map(|module| update_and_output(module.1, &separator, last_item(module.0, len)))
+            .map(|module| update_and_output(module.1, &separator, not_last_item(module.0, len)))
             .collect();
 
-        call(&output);
+        call(&output)?;
         sleep(update_interval);
     }
 }
@@ -176,29 +176,18 @@ pub fn get_config_path() -> Result<PathBuf, &'static str> {
     }
 }
 
-pub fn call(out: &str) {
+pub fn call(out: &str) -> Result<(), std::io::Error> {
     println!("{}", out);
     std::process::Command::new("xsetroot")
         .arg("-name")
         .arg(out)
-        .output()
-        .expect("something happened");
+        .output()?;
+    Ok(())
 }
 
-// fn output_push<T>(module: T, last_m: bool) -> String
-// {
-//     let mut s = String::new();
-//     if let Some(e) = module.output() {
-//         e.push_str(e);
-//     }
-//     if !last_m {
-//         s.push_str(" ");
-//     }
-//     s
-// }
+pub fn update_and_output(module: &mut Module, sep: &str, mut push_sep: bool) -> String {
+    let mut output = String::new();
 
-pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String {
-    let mut output: String;
     match module {
         Module::Time(ref mut m) => {
             m.update();
@@ -206,34 +195,48 @@ pub fn update_and_output(module: &mut Module, sep: &str, last_m: bool) -> String
         }
         Module::Weather(ref mut m) => {
             m.update();
-            output = m.output();
+            match m.output() {
+                Some(s) => output = s,
+                _ => push_sep = false,
+            }
         }
         Module::Net(ref mut m) => {
             m.update();
-            output = m.output();
+            match m.output() {
+                Some(s) => output = s,
+                _ => push_sep = false,
+            }
         }
         Module::Cpu(ref mut m) => {
             m.update();
-            output = m.output().unwrap();
-            // output = output_push(m, last_m);
+            match m.output() {
+                Some(s) => output = s,
+                _ => push_sep = false,
+            }
         }
         Module::Mem(ref mut m) => {
             m.update();
-            output = m.output();
+            match m.output() {
+                Some(s) => output = s,
+                _ => push_sep = false,
+            }
         }
         Module::Bat(ref mut m) => {
             m.update();
-            output = m.output();
+            match m.output() {
+                Some(s) => output = s,
+                _ => push_sep = false,
+            }
         }
     }
 
-    if !last_m {
+    if push_sep {
         output.push_str(sep);
     }
 
     output
 }
 
-pub fn last_item(num: usize, len: usize) -> bool {
-    num >= len
+pub fn not_last_item(num: usize, len: usize) -> bool {
+    num < len
 }

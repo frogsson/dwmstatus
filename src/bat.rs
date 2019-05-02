@@ -1,21 +1,28 @@
 #[derive(Debug, PartialEq, Clone)]
 pub struct Battery {
-    val: String,
+    val: Option<String>,
 }
 
 impl Battery {
     pub fn init() -> Battery {
-        Battery { val: String::new() }
+        Battery { val: None }
     }
 
     pub fn update(&mut self) {
         match std::fs::read_to_string("/sys/class/power_supply/BAT0/capacity") {
-            Ok(s) => self.val = s,
-            Err(e) => println!("{}", e),
+            Ok(s) => self.val = Some(s),
+            Err(e) => {
+                self.val = None;
+                println!("Error: {}", e);
+            },
         }
     }
 
-    pub fn output(&self) -> String {
-        format!("\u{e03b}{}%", self.val)
+    pub fn output(&self) -> Option<String> {
+        match &self.val {
+            Some(val) => Some(format!("\u{e03b}{}%", val)),
+            _ => None,
+        }
+
     }
 }
