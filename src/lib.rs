@@ -117,20 +117,12 @@ impl Config {
     fn format_url(&self) -> Result<String, &'static str> {
         let apikey = match &self.weather_apikey {
             Some(s) => s,
-            None => {
-                return Err(
-                    "`weather` module requires `weather_api` to be set in config.toml",
-                )
-            }
+            None => return Err("`weather` module requires `weather_api` to be set in config.toml"),
         };
 
         let city = match &self.weather_city {
             Some(s) => s,
-            None => {
-                return Err(
-                    "`weather` module requires `weather_city` to be set in config.toml",
-                )
-            }
+            None => return Err("`weather` module requires `weather_city` to be set in config.toml"),
         };
 
         Ok(format!(
