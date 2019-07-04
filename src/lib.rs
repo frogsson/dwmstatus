@@ -1,4 +1,3 @@
-use std::error::Error;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::thread::sleep;
@@ -17,6 +16,8 @@ mod net;
 mod weather;
 mod bat;
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
 #[derive(Debug, PartialEq, Clone)]
 struct Modules {
     time: Option<datetime::Time>,
@@ -28,7 +29,7 @@ struct Modules {
 }
 
 impl Modules {
-    fn init(config: Config, s: &str) -> Result<Modules, Box<dyn std::error::Error>> {
+    fn init(config: Config, s: &str) -> Result<Modules> {
         let time = if s.contains("{datetime}") {
             Some(datetime::Time::init())
         } else {
@@ -183,7 +184,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new() -> Result<Config, Box<dyn Error>> {
+    pub fn new() -> Result<Config> {
         let path = get_config_path()?;
         let config_raw = std::fs::read_to_string(path)?;
         let config = toml::from_str(config_raw.as_str())?;
@@ -204,7 +205,7 @@ impl Config {
         Duration::from_millis((self.update_interval.unwrap_or(1.0) * 1000.0) as u64)
     }
 
-    fn format_url(&self) -> Result<String, &'static str> {
+    fn format_url(&self) -> std::result::Result<String, &'static str> {
         let apikey = match &self.weather_apikey {
             Some(s) => s,
             None => return Err("`weather` module requires `weather_api` to be set in config.toml"),
@@ -221,15 +222,15 @@ impl Config {
         ))
     }
 
-    fn get_net_interface(&self) -> Result<String, &'static str> {
+    fn get_net_interface(&self) -> Result<String> {
         match &self.net_interface {
             Some(e) => Ok(e.to_string()),
-            None => Err("`net` module requires `net_interface` to be set in config.toml"),
+            None => Err("`net` module requires `net_interface` to be set in config.toml".into()),
         }
     }
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run(config: Config) -> Result<()> {
     let format = match &config.format {
         Some(v) => v.to_string(),
         None => return Err("`format` not found in config.toml".into()),
@@ -279,17 +280,17 @@ fn update(mut s: String, m: &mut Modules) -> String {
     s
 }
 
-pub fn get_config_path() -> Result<PathBuf, &'static str> {
+pub fn get_config_path() -> Result<PathBuf> {
     match dirs::home_dir() {
         Some(mut path) => {
             path.push(".config/rustystatus/config.toml");
             Ok(path)
         }
-        None => Err("missing home directory definition `$HOME`"),
+        None => Err("missing home directory definition `$HOME`".into()),
     }
 }
 
-pub fn call(out: &str) -> Result<(), std::io::Error> {
+pub fn call(out: &str) -> Result<()> {
     println!("{}", out);
     std::process::Command::new("xsetroot")
         .arg("-name")
