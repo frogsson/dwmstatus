@@ -50,7 +50,7 @@ impl Cpu {
 
     pub fn output(&self) -> Option<String> {
         match self.val {
-            Ok(i) => Some(format!("\u{e223}{:02}%", i)),
+            Ok(i) => Some(format!("{:02}", i)),
             Err(_) => None,
         }
     }

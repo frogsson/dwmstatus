@@ -1,15 +1,6 @@
-output_separator = " "
-
 # available modules
 # "netspeed", "memory", "cpu", "weather", "time", "battery"
-output_order = [
-	"netspeed",
-	"memory",
-	"cpu",
-	"battery",
-	"weather",
-	"time",
-]
+format = "{datetime}"
 
 # get your api key from:
 # https://openweathermap.org/

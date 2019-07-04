@@ -33,7 +33,7 @@ impl Mem {
 
     pub fn output(&self) -> Option<String> {
         match &self.used_mem {
-            Some(used_mem) => Some(format!("\u{e021}{:02}%", used_mem.round())),
+            Some(used_mem) => Some(format!("{:02}", used_mem.round())),
             _ => None,
         }
     }

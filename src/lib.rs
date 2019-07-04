@@ -18,19 +18,164 @@ mod weather;
 mod bat;
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum Module {
-    Time(datetime::Time),
-    Weather(weather::Weather),
-    Net(net::Net),
-    Cpu(cpu::Cpu),
-    Mem(mem::Mem),
-    Bat(bat::Battery),
+struct Modules {
+    time: Option<datetime::Time>,
+    weather: Option<weather::Weather>,
+    net: Option<net::Net>,
+    cpu: Option<cpu::Cpu>,
+    mem: Option<mem::Mem>,
+    bat: Option<bat::Battery>,
+}
+
+impl Modules {
+    fn init(config: Config, s: &str) -> Result<Modules, Box<dyn std::error::Error>> {
+        let time = if s.contains("{datetime}") {
+            Some(datetime::Time::init())
+        } else {
+            None
+        };
+
+        let weather = if s.contains("weather") {
+            let url = config.format_url()?;
+            Some(weather::Weather::init(url))
+        } else {
+            None
+        };
+
+        let net = if s.contains("{download}")
+                  || s.contains("{upload}") {
+            let interface = config.get_net_interface()?;
+            Some(net::Net::init(interface))
+        } else {
+            None
+        };
+
+        let cpu = if s.contains("{cpu}") {
+            Some(cpu::Cpu::init())
+        } else {
+            None
+        };
+
+        let mem = if s.contains("{memory}") {
+            Some(mem::Mem::init())
+        } else {
+            None
+        };
+
+        let bat = if s.contains("{bat}") {
+            Some(bat::Battery::init())
+        } else {
+            None
+        };
+
+        let m = Modules {
+            time,
+            weather,
+            net,
+            cpu,
+            mem,
+            bat,
+        };
+
+        Ok(m)
+    }
+
+    fn update_time(&mut self) -> String {
+        match self.time {
+            Some(ref mut v) => {
+                v.update();
+                v.output()
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn update_net(&mut self) {
+        if let Some(ref mut v) = self.net {
+            v.update();
+        }
+    }
+
+    fn net_dl(&mut self) -> String {
+        match self.net {
+            Some(ref mut v) => {
+                match v.dl_output() {
+                    Some(s) => s.to_string(),
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn net_up(&mut self) -> String {
+        match self.net {
+            Some(ref mut v) => {
+                match v.up_output() {
+                    Some(s) => s.to_string(),
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn update_weather(&mut self) -> String {
+        match self.weather {
+            Some(ref mut v) => {
+                v.update();
+                match v.output() {
+                    Some(s) => s,
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn update_cpu(&mut self) -> String {
+        match self.cpu {
+            Some(ref mut v) => {
+                v.update();
+                match v.output() {
+                    Some(s) => s,
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn update_mem(&mut self) -> String {
+        match self.mem {
+            Some(ref mut v) => {
+                v.update();
+                match v.output() {
+                    Some(s) => s,
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
+
+    fn update_bat(&mut self) -> String {
+        match self.bat {
+            Some(ref mut v) => {
+                v.update();
+                match v.output() {
+                    Some(s) => s,
+                    None => String::from("N/A"),
+                }
+            },
+            None => String::from("N/A"),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    output_separator: Option<String>,
-    output_order: Option<Vec<String>>,
+    format: Option<String>,
     weather_apikey: Option<String>,
     weather_city: Option<String>,
     net_interface: Option<String>,
@@ -40,15 +185,14 @@ pub struct Config {
 impl Config {
     pub fn new() -> Result<Config, Box<dyn Error>> {
         let path = get_config_path()?;
-        let config = std::fs::read_to_string(path)?;
-        let config = toml::from_str(config.as_str())?;
+        let config_raw = std::fs::read_to_string(path)?;
+        let config = toml::from_str(config_raw.as_str())?;
         Ok(config)
     }
 
     pub fn default() -> Config {
         Config {
-            output_separator: Some(" ".to_string()),
-            output_order: Some(vec!["time".to_string()]),
+            format: Some("{datetime}".to_string()),
             weather_apikey: None,
             weather_city: None,
             net_interface: None,
@@ -58,60 +202,6 @@ impl Config {
 
     pub fn update_interval(&self) -> Duration {
         Duration::from_millis((self.update_interval.unwrap_or(1.0) * 1000.0) as u64)
-    }
-
-    pub fn separator(&self) -> String {
-        match &self.output_separator {
-            Some(e) => e.to_string(),
-            None => " ".to_string(),
-        }
-    }
-
-    pub fn modules(&self) -> Result<Vec<Module>, Box<dyn Error>> {
-        let v = match &self.output_order {
-            Some(e) => e,
-            None => {
-                eprintln!("Could not parse output_order");
-                return Ok(vec![Module::Time(datetime::Time::init())]);
-            }
-        };
-
-        let mut vm = Vec::new();
-        for module in v.iter() {
-            match module.as_str() {
-                "time" => {
-                    let time = datetime::Time::init();
-                    vm.push(Module::Time(time));
-                },
-                "netspeed" => {
-                    let interface = self.get_net_interface()?;
-                    let net = net::Net::init(interface);
-                    vm.push(Module::Net(net));
-                },
-                "cpu" => {
-                    let cpu = cpu::Cpu::init();
-                    vm.push(Module::Cpu(cpu));
-                },
-                "memory" => {
-                    let mem = mem::Mem::init();
-                    vm.push(Module::Mem(mem));
-                },
-                "weather" => {
-                    let url = self.format_url()?;
-                    let weather = weather::Weather::init(url);
-                    vm.push(Module::Weather(weather));
-                },
-                "battery" => {
-                    let bat = bat::Battery::init();
-                    vm.push(Module::Bat(bat));
-                },
-                invalid_module => {
-                    eprintln!("{:?} - Not a valid Module", invalid_module);
-                }
-            }
-        }
-
-        Ok(vm)
     }
 
     fn format_url(&self) -> Result<String, &'static str> {
@@ -140,22 +230,53 @@ impl Config {
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let mut modules = config.modules()?;
+    let format = match &config.format {
+        Some(v) => v.to_string(),
+        None => return Err("`format` not found in config.toml".into()),
+    };
     let update_interval = config.update_interval();
-    let separator = config.separator();
-    let len = modules.len() - 1;
-    std::mem::drop(config);
+    let mut modules = Modules::init(config, &format)?;
 
     loop {
-        let output: String = modules
-            .iter_mut()
-            .enumerate()
-            .map(|module| update_and_output(module.1, &separator, not_last_item(module.0, len)))
-            .collect();
-
+        let output = update(format.clone(), &mut modules);
         call(&output)?;
         sleep(update_interval);
     }
+}
+
+fn update(mut s: String, m: &mut Modules) -> String {
+    if s.contains("{datetime}") {
+        let t = m.update_time();
+        s = s.replace("{datetime}", &t);
+    };
+
+    if s.contains("{weather}") {
+        let t = m.update_weather();
+        s = s.replace("{weather}", &t)
+    };
+
+    if s.contains("{download}") || s.contains("{upload}") {
+        m.update_net();
+        s = s.replace("{upload}", &m.net_up());
+        s = s.replace("{download}", &m.net_dl());
+    };
+
+    if s.contains("{cpu}") {
+        let t = m.update_cpu();
+        s = s.replace("{cpu}", &t)
+    };
+
+    if s.contains("{memory}") {
+        let t = m.update_mem();
+        s = s.replace("{memory}", &t)
+    };
+
+    if s.contains("{bat}") {
+        let t = m.update_bat();
+        s = s.replace("{bat}", &t)
+    };
+
+    s
 }
 
 pub fn get_config_path() -> Result<PathBuf, &'static str> {
@@ -175,60 +296,4 @@ pub fn call(out: &str) -> Result<(), std::io::Error> {
         .arg(out)
         .output()?;
     Ok(())
-}
-
-pub fn update_and_output(module: &mut Module, sep: &str, mut push_sep: bool) -> String {
-    let mut output = String::new();
-
-    match module {
-        Module::Time(ref mut m) => {
-            m.update();
-            output = m.output();
-        }
-        Module::Weather(ref mut m) => {
-            m.update();
-            match m.output() {
-                Some(s) => output = s,
-                _ => push_sep = false,
-            }
-        }
-        Module::Net(ref mut m) => {
-            m.update();
-            match m.output() {
-                Some(s) => output = s,
-                _ => push_sep = false,
-            }
-        }
-        Module::Cpu(ref mut m) => {
-            m.update();
-            match m.output() {
-                Some(s) => output = s,
-                _ => push_sep = false,
-            }
-        }
-        Module::Mem(ref mut m) => {
-            m.update();
-            match m.output() {
-                Some(s) => output = s,
-                _ => push_sep = false,
-            }
-        }
-        Module::Bat(ref mut m) => {
-            m.update();
-            match m.output() {
-                Some(s) => output = s,
-                _ => push_sep = false,
-            }
-        }
-    }
-
-    if push_sep {
-        output.push_str(sep);
-    }
-
-    output
-}
-
-pub fn not_last_item(num: usize, len: usize) -> bool {
-    num < len
 }

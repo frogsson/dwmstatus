@@ -12,7 +12,7 @@ impl Time {
 
     pub fn update(&mut self) {
         self.val = chrono::Local::now()
-            .format("\u{e225}%A %b %Y-%m-%d %H:%M")
+            .format("%A %b %Y-%m-%d %H:%M")
             .to_string();
     }
 

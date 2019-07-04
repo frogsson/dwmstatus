@@ -58,9 +58,15 @@ impl Net {
         }
     }
 
-    pub fn output(&self) -> Option<String> {
-        match (&self.avg_recv, &self.avg_tran) {
-            (Some(recv), Some(tran)) => Some(format!("\u{e061}{:.2} MB/s \u{e060}{:.2} MB/s", recv, tran)),
+    pub fn dl_output(&self) -> Option<String> {
+        match &self.avg_recv {
+            Some(recv) => Some(format!("{:.2}",*recv)),
+            _ => None,
+        }
+    }
+    pub fn up_output(&self) -> Option<String> {
+        match &self.avg_tran {
+            Some(tran) => Some(format!("{:.2}", *tran)),
             _ => None,
         }
     }

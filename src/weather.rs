@@ -53,7 +53,7 @@ impl Weather {
 
     pub fn output(&self) -> Option<String> {
         match (&self.description, &self.degrees) {
-            (Some(descript), Some(degree)) => Some(format!("\u{e01d}{} {}°C", descript, degree)),
+            (Some(descript), Some(degree)) => Some(format!("{} {}°C", descript, degree)),
             _ => None,
         }
     }

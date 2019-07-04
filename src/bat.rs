@@ -20,7 +20,7 @@ impl Battery {
 
     pub fn output(&self) -> Option<String> {
         match &self.val {
-            Some(val) => Some(format!("\u{e03b}{}%", val)),
+            Some(val) => Some(val.to_string()),
             _ => None,
         }
 
